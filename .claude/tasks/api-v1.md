@@ -1,0 +1,134 @@
+# API v1 — таск-трекер (Telegram miniapp)
+
+Контекст, решения, план и прогресс реализации. Читать целиком перед работой.
+
+## Материалы
+
+- Документация API (Confluence): https://practiceilya.atlassian.net/wiki/spaces/~7120207c4bac83d9994bb493c9716a0b74c5f6/pages/425986/API
+  (page id `425986`). В Jira не ходим.
+- Шаблон структуры: https://github.com/golang-standards/project-layout/blob/master/README_ru.md
+- Библиотеки: chi (роутер), telego (только валидация initData: `telegoutil.ValidateWebAppData`),
+  lo (slice/map там, где нет в stdlib slices/maps), zerolog (логи), pgx/v5 (Postgres),
+  goose (миграции).
+- Кодстайл: скиллы `go-code-style`, `go-tests`.
+
+## Принципы
+
+- Максимально просто для быстрой интеграции с фронтом: без graceful shutdown и прочих обвязок.
+- Слои handler → service → repository на конкретных типах, без интерфейсов.
+- Работаем по одному подпункту: сделал → остановился → пользователь проверяет и коммитит сам.
+  Ничего не коммитить. После коммита отметить подпункт `[x]` ниже.
+
+## Решения
+
+### Стек и инфраструктура
+
+- Go 1.27, модуль `teriyaki-sauce-service`, entry point `cmd/main.go`.
+- Postgres уже развёрнут на сервере деплоя — docker-compose нет. Подключение только через
+  `DATABASE_URL`. Локально — brew Postgres (перед запуском/созданием БД спросить пользователя).
+- Миграции goose, вшиты через `//go:embed`, `goose.Up` на старте сервиса.
+- Конфиг из env: `HTTP_ADDR` (default `:8080`), `DATABASE_URL`, `BOT_TOKEN`, `DEV_USER_ID`.
+  Makefile подхватывает `.env` (в .gitignore), есть `.env.example`.
+- CORS allow-all (минимальный middleware, разрешён заголовок `Authorization`).
+
+### Авторизация
+
+- Заголовок `Authorization: tma <initData>`, проверка `telegoutil.ValidateWebAppData(BOT_TOKEN, …)`
+  + `auth_date` не старше 24ч. User ID из поля `user` (JSON) кладётся в context.
+- `DEV_USER_ID` задан → проверка пропускается, используется этот ID (разработка вне Telegram).
+- Таблицы users нет: `user_id BIGINT` = Telegram ID. Чужой ресурс → 404.
+
+### Формат ответов
+
+- Успех: `{"data": ..., "error": null}`. Ошибка: `{"data": null, "error": "текст"}`.
+- Коды: 200, 201 (создание), 400, 401, 404, 409, 500. DELETE → 200 с обёрткой (не 204).
+- Время — RFC3339. Опциональные поля отсутствуют в ответе, если пусты.
+  `tags` и `notes` — всегда массивы (`[]`, не `null`).
+
+### Задачи
+
+- `id` во всех ответах (в доке местами пропущен).
+- Запрос: `name` (обязателен), `description?`, `date?`, `notifyAt?`, `priority?` (0–3, default 0),
+  `tagIds?: []int`, `isCompleted` (в PUT). Ответ: `tags: [{id, name, color}]`, `notes: [...]`.
+- PUT — полная замена (непереданное поле очищается), включая `tagIds` и `isCompleted`;
+  `notes` в запросе игнорируются.
+- PATCH `/complete` → `isCompleted=true`, идемпотентно. Снять — через PUT.
+- DELETE — каскадно удаляет заметки.
+- `GET /v1/tasks`: фильтры `startDate`, `endDate` (RFC3339), `isCompleted` (опечатка `isComleted`
+  в доке исправлена).
+  - только `startDate` → date ∈ `[startDate, startDate+24h)`;
+  - оба → `[startDate, endDate)`;
+  - только `endDate` → date `< endDate`;
+  - задачи без `date` при дата-фильтре не попадают;
+  - сортировка: date (null в конце), id.
+- Уведомления по `notifyAt` не отправляем — только храним.
+
+### Теги (нет в доке — добавить в README)
+
+- `{id, name, color?}`, color `#RRGGBB`, `name` уникален в пределах пользователя → 409.
+- Роуты: `POST /v1/tag`, `GET /v1/tags`, `PUT /v1/tag/{id}`, `DELETE /v1/tag/{id}`.
+- Удаление тега снимает его со всех задач (FK cascade в `task_tags`).
+
+### Заметки
+
+- `date` — время создания, при редактировании не меняется.
+- PUT `/v1/note/{id}` с другим `taskId` переносит заметку (задача должна быть того же юзера).
+
+### Тесты
+
+- Только юнит-тест на валидацию initData. Остальное — `scripts/smoke.sh` (curl + jq)
+  против запущенного сервиса с `DEV_USER_ID`; дополняется на каждом шаге.
+
+## Структура
+
+```
+cmd/main.go
+internal/
+  app/app.go                     env, логгер, pgxpool, goose.Up, сборка слоёв, старт
+  auth/auth.go, auth_test.go     валидация initData, middleware, UserID(ctx)
+  model/model.go                 Task/Note/Tag, входные структуры, доменные ошибки
+  api/rest/rest.go               http.Server
+  api/rest/router/router.go      chi, Recoverer, лог запросов, CORS, auth, роуты
+  api/rest/response/response.go обёртка {data, error}
+  api/rest/handler/              handler.go, tag.go, task.go, note.go
+  service/                       service.go, tag.go, task.go, note.go
+  repository/                    repository.go, tag.go, task.go, note.go
+  repository/migrations/00001_init.sql
+scripts/smoke.sh
+Makefile, .env.example, .gitignore, README.md
+```
+
+## План и прогресс
+
+Каждый подпункт — отдельный коммит.
+
+### Шаг 1. Каркас
+- [ ] 1.1 Контекст для агентов: этот файл + `CLAUDE.md`.
+- [ ] 1.2 HTTP-каркас: `cmd/main.go` (удалить корневой `main.go`), app, rest, router (Recoverer,
+  лог zerolog, CORS), response, `GET /health`; Makefile (`run`, `build`, `lint`), `.gitignore`,
+  `.env.example`, `scripts/smoke.sh`. Проверка: `curl /health`.
+- [ ] 1.3 Postgres: pgxpool, goose + `00001_init.sql` (tasks, tags, task_tags, notes), миграции на
+  старте. Проверка: сервис стартует с `DATABASE_URL`, таблицы созданы.
+- [ ] 1.4 Auth: `internal/auth`, подключение на `/v1`, юнит-тест. Проверка: `go test ./...`,
+  без заголовка → 401.
+
+### Шаг 2. Теги
+- [ ] 2.1 CRUD тегов: модель, repository, service (валидация, 409), handlers, роуты, smoke.
+
+### Шаг 3. Задачи
+- [ ] 3.1 `POST /v1/task`, `GET /v1/task/{id}`: task + task_tags в транзакции, tagIds
+  принадлежат юзеру, ответ с tags и `notes: []`.
+- [ ] 3.2 `GET /v1/tasks`: фильтры, пакетная подгрузка тегов (`ANY($1)`, без N+1).
+- [ ] 3.3 `PUT /v1/task/{id}`, `PATCH /v1/task/{id}/complete`, `DELETE /v1/task/{id}`.
+
+### Шаг 4. Заметки
+- [ ] 4.1 `POST /v1/note`, `PUT /v1/note/{id}` (с переносом), `DELETE /v1/note/{id}`.
+- [ ] 4.2 Заметки во всех ответах задач (пакетно).
+
+### Шаг 5. Финал
+- [ ] 5.1 README: запуск, env, `DATABASE_URL` (миграции на старте → отдельная БД/юзер),
+  auth для фронта, отличия от Confluence-доки (обёртка, id везде, tagIds, API тегов, фильтры).
+
+## Журнал
+
+- 2026-09-26: план согласован. Сделан 1.1, ждёт коммита.
