@@ -103,7 +103,7 @@ Makefile, .env.example, .gitignore, README.md
 Каждый подпункт — отдельный коммит.
 
 ### Шаг 1. Каркас
-- [ ] 1.1 Контекст для агентов: этот файл + `CLAUDE.md`.
+- [x] 1.1 Контекст для агентов: этот файл + `CLAUDE.md`.
 - [ ] 1.2 HTTP-каркас: `cmd/main.go` (удалить корневой `main.go`), app, rest, router (Recoverer,
   лог zerolog, CORS), response, `GET /health`; Makefile (`run`, `build`, `lint`), `.gitignore`,
   `.env.example`, `scripts/smoke.sh`. Проверка: `curl /health`.
@@ -131,4 +131,5 @@ Makefile, .env.example, .gitignore, README.md
 
 ## Журнал
 
-- 2026-09-26: план согласован. Сделан 1.1, ждёт коммита.
+- 2026-09-26: план согласован. 1.1 закоммичен.
+- 2026-09-26: сделан 1.2, ждёт коммита. Неизвестный роут/метод → 404/405 тоже в обёртке.
