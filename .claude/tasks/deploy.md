@@ -26,9 +26,15 @@ Actions ▸ deploy (кнопка, тег) ─ssh deploy@VPS─► /opt/teriyaki:
   v2.13.2), `go test`, gitleaks по всей истории, govulncheck. Образ собирается и публикуется только
   на push в master после успешных проверок. Инструменты — из `tools/go.mod`, как в хуках.
 - Выкатка — только кнопкой: workflow `deploy` (workflow_dispatch, вход — тег, по умолчанию `latest`),
-  GitHub Environment `production`. Копирует `deploy/compose.yml` и `deploy/Caddyfile` на сервер,
+  GitHub Environment `production`. Копирует `deploy/compose.yml` и `deploy/caddy/` на сервер (`tar | ssh tar`),
   пишет тег в `/opt/teriyaki/.env` (APP_TAG), `docker compose pull && up -d`, проверяет
   `https://<домен>/health`. Откат — deploy с предыдущим `sha-…`.
+- Caddyfile монтируется папкой `./caddy:/etc/caddy`, не файлом: bind mount одного файла держит старый
+  inode, замена файла (tar/scp/редактор) не видна контейнеру — поймано на локальной проверке.
+  После `up -d` deploy делает `caddy reload`.
+- Environment `production`: secret `SSH_KEY`; variables `SSH_HOST`, `SSH_KNOWN_HOSTS`, `DOMAIN`.
+  Deploy работает только с master (`if: github.ref == refs/heads/master`), тег валидируется
+  регуляркой до подстановки в ssh-команду.
 - SSH: пользователь `deploy` в группе docker, без sudo, отдельный ed25519-ключ только для CI; ключ,
   хост и known_hosts — секреты Environment `production`. Без сторонних ssh-экшенов.
 - Запуск: docker compose, app + caddy, оба `network_mode: host`. App слушает `127.0.0.1:8080`.
@@ -53,10 +59,10 @@ Actions ▸ deploy (кнопка, тег) ─ssh deploy@VPS─► /opt/teriyaki:
 ### Шаг 6. Деплой
 - [x] 6.1 CI: `.github/workflows/ci.yml` — проверки на PR/push, сборка и публикация образа в GHCR
   на push в master (`sha-<short>`, `latest`).
-- [ ] 6.2 Прод-конфиг `deploy/`: `compose.yml`, `Caddyfile`, `app.env.example`, `caddy.env.example`,
+- [x] 6.2 Прод-конфиг `deploy/`: `compose.yml`, `Caddyfile`, `app.env.example`, `caddy.env.example`,
   `backup.sh`, `README.md` (bootstrap сервера: Docker, ufw 22/80/443, юзер deploy, роль/БД Postgres,
   pg_hba, бэкап, DNS).
-- [ ] 6.2.1 Локальный стенд для фронта (по просьбе фронта): `compose.yml` в корне — Postgres 18 в
+- [x] 6.2.1 Локальный стенд для фронта (по просьбе фронта): `compose.yml` в корне — Postgres 18 в
   контейнере + API из исходников (`build: .`), `DEV_USER_ID=1`, порт `${APP_PORT:-8080}`, раздел в README.
 - [ ] 6.3 Deploy workflow: `.github/workflows/deploy.yml` (dispatch с тегом, environment production,
   scp конфига, compose up, проверка /health).
@@ -84,3 +90,7 @@ Actions ▸ deploy (кнопка, тег) ─ssh deploy@VPS─► /opt/teriyaki:
 - 2026-09-27: gitleaks блокировал коммит 6.2: своё правило postgres-url-password ловило плейсхолдер
   `<пароль>` в deploy/README.md. В allowlist добавлены `<...>`. Урок: `gitleaks dir <подпапка>` не
   видит корневой `.gitleaks.toml` — проверять с `--config .gitleaks.toml` или `git --staged`.
+- 2026-09-27: 6.2 и 6.2.1 закоммичены (48f89bb). Сделан 6.3, ждёт коммита. actionlint+shellcheck
+  чистые. Rollout-скрипт прогнан локально на OrbStack (кроме pull — образа в GHCR ещё нет): поймана
+  и исправлена проблема single-file mount Caddyfile (перенесён в deploy/caddy/). SSH-часть
+  реально не проверена — только в 6.4.

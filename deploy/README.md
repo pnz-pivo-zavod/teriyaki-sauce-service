@@ -8,7 +8,7 @@ Actions ▸ deploy ─ssh deploy@VPS─► /opt/teriyaki: docker compose pull &&
 
 | Файл | На сервере | Кто кладёт |
 |---|---|---|
-| `compose.yml`, `Caddyfile` | `/opt/teriyaki/` | workflow deploy при каждом деплое |
+| `compose.yml`, `caddy/Caddyfile` | `/opt/teriyaki/` | workflow deploy при каждом деплое |
 | `.env` (`APP_TAG=...`) | `/opt/teriyaki/.env` | workflow deploy |
 | `app.env`, `caddy.env` | `/opt/teriyaki/` | руками, один раз (секреты) |
 | `backup.sh` | `/etc/cron.daily/teriyaki-backup` | руками, один раз |
@@ -143,6 +143,37 @@ sudo ls -l /var/backups/teriyaki
 ```sh
 sudo -u postgres pg_restore --clean --if-exists -d teriyaki /var/backups/teriyaki/<файл>.dump
 ```
+
+## 8. GitHub: Environment и пакет
+
+**Environment.** Settings ▸ Environments ▸ New environment `production`:
+
+| Тип | Имя | Значение |
+|---|---|---|
+| Secret | `SSH_KEY` | приватный ключ целиком: `cat ~/.ssh/teriyaki-deploy` (шаг 4) |
+| Variable | `SSH_HOST` | IP VPS |
+| Variable | `SSH_KNOWN_HOSTS` | вывод `ssh-keyscan -t ed25519 <IP>` — сверить отпечаток с `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` на сервере |
+| Variable | `DOMAIN` | домен из шага 1, без `https://` |
+
+По желанию там же: Required reviewers — выкатка только после подтверждения.
+
+**Пакет.** После первого успешного CI на master образ появится в Packages организации. Он создаётся
+приватным: Package settings ▸ Change visibility ▸ Public — иначе сервер не сможет его скачать без
+логина.
+
+## 9. Первый деплой
+
+Actions ▸ deploy ▸ Run workflow (ветка master, тег `latest`). Workflow:
+
+1. проверяет тег (`latest` или `sha-<hex>`);
+2. копирует `compose.yml` и `caddy/` в `/opt/teriyaki` (tar по ssh);
+3. пишет `APP_TAG` в `.env`, печатает предыдущий — пригодится для отката;
+4. `docker compose pull && up -d`, `caddy reload` (Caddyfile примонтирован папкой, правки
+   подхватываются без рестарта), чистит старые образы;
+5. ждёт до минуты `https://<домен>/health`.
+
+Первый старт Caddy получает сертификат — если health check не прошёл, смотреть
+`docker compose logs caddy`: чаще всего DNS ещё не смотрит на VPS или закрыт порт 80.
 
 ## Эксплуатация
 
