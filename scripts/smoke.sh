@@ -165,6 +165,18 @@ check "create note: blank text -> 400" 400 '.error == "text is required"' \
 check "create note: no taskId -> 400" 400 '.error == "taskId is required"' POST /v1/note '{"text":"x"}'
 check "create note: missing task -> 404" 404 '.error != null' \
 	POST /v1/note '{"taskId":999999999,"text":"x"}'
+check "second note" 201 '.data.id > 0' POST /v1/note "{\"taskId\":$T1,\"text\":\"n2\"}"
+NOTE2_ID="$(last .data.id)"
+check "get task: notes in creation order" 200 \
+	"[.data.notes[] | {id, taskId, text}] == [{id: $NOTE_ID, taskId: $T1, text: \"n1\"}, {id: $NOTE2_ID, taskId: $T1, text: \"n2\"}]" \
+	GET "/v1/task/$T1"
+check "list tasks: notes filled, other tasks []" 200 \
+	"(.data[] | select(.id == $T1) | .notes | length == 2) and (.data[] | select(.id == $T2) | .notes == [])" \
+	GET /v1/tasks
+check "put task: keeps notes, ignores notes in body" 200 ".data.notes | length == 2" \
+	PUT "/v1/task/$T1" '{"name":"t1","date":"2026-10-01T10:00:00Z","notes":[]}'
+check "complete task: returns notes" 200 '.data.isCompleted == true and (.data.notes | length == 2)' \
+	PATCH "/v1/task/$T1/complete"
 check "update note: text, date unchanged" 200 \
 	".data.id == $NOTE_ID and .data.taskId == $T1 and .data.text == \"n1-upd\" and .data.date == \"$NOTE_DATE\"" \
 	PUT "/v1/note/$NOTE_ID" "{\"taskId\":$T1,\"text\":\"n1-upd\"}"

@@ -57,7 +57,7 @@ func Run() error {
 
 	var (
 		tagHandler  = handler.NewTagHandler(service.NewTagService(tagRepo))
-		taskHandler = handler.NewTaskHandler(service.NewTaskService(taskRepo, tagRepo))
+		taskHandler = handler.NewTaskHandler(service.NewTaskService(taskRepo, tagRepo, noteRepo))
 		noteHandler = handler.NewNoteHandler(service.NewNoteService(noteRepo))
 	)
 

@@ -20,11 +20,14 @@ const (
 type TaskService struct {
 	tasks *repository.TaskRepository
 	tags  *repository.TagRepository
+	notes *repository.NoteRepository
 }
 
 // NewTaskService создаёт TaskService.
-func NewTaskService(tasks *repository.TaskRepository, tags *repository.TagRepository) *TaskService {
-	return &TaskService{tasks: tasks, tags: tags}
+func NewTaskService(
+	tasks *repository.TaskRepository, tags *repository.TagRepository, notes *repository.NoteRepository,
+) *TaskService {
+	return &TaskService{tasks: tasks, tags: tags, notes: notes}
 }
 
 // Create создаёт задачу и возвращает её целиком. isCompleted из запроса игнорируется.
@@ -107,7 +110,7 @@ func (s *TaskService) Delete(ctx context.Context, userID, id int64) error {
 	return s.tasks.Delete(ctx, userID, id)
 }
 
-// fill подгружает теги задач одним запросом. tags и notes всегда не nil.
+// fill подгружает теги и заметки задач — по одному запросу на всё. tags и notes всегда не nil.
 func (s *TaskService) fill(ctx context.Context, tasks []model.Task) ([]model.Task, error) {
 	if len(tasks) == 0 {
 		return tasks, nil
@@ -120,9 +123,14 @@ func (s *TaskService) fill(ctx context.Context, tasks []model.Task) ([]model.Tas
 		return nil, err
 	}
 
+	notes, err := s.notes.ListByTaskIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
 	for i := range tasks {
 		tasks[i].Tags = lo.CoalesceSliceOrEmpty(tags[tasks[i].ID])
-		tasks[i].Notes = []model.Note{} // ponytail: заметки подгружаются в 4.2
+		tasks[i].Notes = lo.CoalesceSliceOrEmpty(notes[tasks[i].ID])
 	}
 
 	return tasks, nil

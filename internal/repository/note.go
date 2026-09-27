@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/samber/lo"
 
 	"teriyaki-sauce-service/internal/model"
 )
@@ -19,6 +20,8 @@ var (
 	_noteUpdateSQL string
 	//go:embed queries/note/delete.sql
 	_noteDeleteSQL string
+	//go:embed queries/note/list_by_task_ids.sql
+	_noteListByTaskIDsSQL string
 )
 
 // NoteRepository — заметки в Postgres. Владелец заметки — владелец её задачи.
@@ -84,4 +87,20 @@ func (r *NoteRepository) Delete(ctx context.Context, userID, id int64) error {
 	}
 
 	return nil
+}
+
+// ListByTaskIDs возвращает заметки задач (по возрастанию date), сгруппированные по ID задачи.
+// Задачи без заметок в результате отсутствуют.
+func (r *NoteRepository) ListByTaskIDs(ctx context.Context, taskIDs []int64) (map[int64][]model.Note, error) {
+	rows, err := r.db.Query(ctx, _noteListByTaskIDsSQL, taskIDs)
+	if err != nil {
+		return nil, fmt.Errorf("select task notes: %w", err)
+	}
+
+	notes, err := pgx.CollectRows(rows, pgx.RowToStructByPos[model.Note])
+	if err != nil {
+		return nil, fmt.Errorf("collect task notes: %w", err)
+	}
+
+	return lo.GroupBy(notes, func(n model.Note) int64 { return n.TaskID }), nil
 }
