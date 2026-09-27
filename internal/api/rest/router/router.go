@@ -13,7 +13,7 @@ import (
 )
 
 // New собирает роутер со всеми middleware и маршрутами.
-func New(h *handler.Handler, auth func(http.Handler) http.Handler) http.Handler {
+func New(auth func(http.Handler) http.Handler, tag *handler.TagHandler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer, logRequests, cors)
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
@@ -23,12 +23,17 @@ func New(h *handler.Handler, auth func(http.Handler) http.Handler) http.Handler 
 		response.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 	})
 
-	r.Get("/health", h.Health)
+	r.Get("/health", handler.Health)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(auth)
 
-		r.Get("/me", h.Me)
+		r.Get("/me", handler.Me)
+
+		r.Post("/tag", tag.Create)
+		r.Get("/tags", tag.List)
+		r.Put("/tag/{id}", tag.Update)
+		r.Delete("/tag/{id}", tag.Delete)
 	})
 
 	return r

@@ -16,6 +16,7 @@ import (
 	"teriyaki-sauce-service/internal/api/rest/router"
 	"teriyaki-sauce-service/internal/auth"
 	"teriyaki-sauce-service/internal/repository"
+	"teriyaki-sauce-service/internal/service"
 )
 
 const _defaultAddr = ":8080"
@@ -53,11 +54,11 @@ func Run() error {
 		return err
 	}
 
-	h := handler.New()
+	tagHandler := handler.NewTagHandler(service.NewTagService(repository.NewTagRepository(pool)))
 
 	log.Info().Str("addr", addr).Msg("http server started")
 
-	return rest.Run(addr, router.New(h, authMW))
+	return rest.Run(addr, router.New(authMW, tagHandler))
 }
 
 func newAuth() (func(http.Handler) http.Handler, error) {

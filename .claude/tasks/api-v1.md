@@ -16,6 +16,10 @@
 
 - Максимально просто для быстрой интеграции с фронтом: без graceful shutdown и прочих обвязок.
 - Слои handler → service → repository на конкретных типах, без интерфейсов.
+- Каждый слой разделён структурами по предметным областям: `TagHandler` → `TagService` →
+  `TagRepository` (дальше `Task*`, `Note*`), конструкторы `NewTagHandler` и т.п. Методы без
+  повторения домена: `Create`, `List`, `Get`, `Update`, `Delete`. Кросс-доменные зависимости
+  передаются явно в конструктор. `Health`/`Me` — функции пакета handler.
 - Работаем по одному подпункту: сделал → остановился → пользователь проверяет и коммитит сам.
   Ничего не коммитить. После коммита отметить подпункт `[x]` ниже.
 
@@ -27,6 +31,8 @@
 - Postgres уже развёрнут на сервере деплоя — docker-compose нет. Подключение только через
   `DATABASE_URL`. Локально — brew Postgres (перед запуском/созданием БД спросить пользователя).
 - Миграции goose, вшиты через `//go:embed`, `goose.Up` на старте сервиса.
+- Весь SQL — в `.sql` файлах `internal/repository/queries/<сущность>/<действие>.sql`, грузится
+  через `//go:embed` в пакетные `string`-переменные (`_tagCreateSQL`). Инлайн-SQL в Go нет.
 - Конфиг из env: `HTTP_ADDR` (default `:8080`), `DATABASE_URL`, `BOT_TOKEN`, `DEV_USER_ID`.
   Makefile подхватывает `.env` (в .gitignore), есть `.env.example`.
 - CORS allow-all (минимальный middleware, разрешён заголовок `Authorization`).
@@ -77,6 +83,13 @@
 - `date` — время создания, при редактировании не меняется.
 - PUT `/v1/note/{id}` с другим `taskId` переносит заметку (задача должна быть того же юзера).
 
+### Ошибки
+
+- Доменные ошибки в `internal/model`: `ErrNotFound` → 404, `ErrConflict` → 409,
+  `*ValidationError` → 400. Текст ошибки уходит клиенту (`tag 5 not found`). Прочее → 500
+  `internal error` + лог.
+- Строковые поля (`name`) тримятся перед валидацией и сохранением.
+
 ### Тесты
 
 - Только юнит-тест на валидацию initData. Остальное — `scripts/smoke.sh` (curl + jq)
@@ -93,10 +106,11 @@ internal/
   api/rest/rest.go               http.Server
   api/rest/router/router.go      chi, Recoverer, лог запросов, CORS, auth, роуты
   api/rest/response/response.go обёртка {data, error}
-  api/rest/handler/              handler.go, tag.go, task.go, note.go
-  service/                       service.go, tag.go, task.go, note.go
-  repository/                    repository.go, tag.go, task.go, note.go
+  api/rest/handler/              handler.go (хелперы, Health, Me), tag.go, task.go, note.go
+  service/                       tag.go, task.go, note.go
+  repository/                    repository.go (Migrate, хелперы), tag.go, task.go, note.go
   repository/migrations/00001_init.sql
+  repository/queries/{tag,task,note}/*.sql  запросы, грузятся через //go:embed
 scripts/smoke.sh
 Makefile, .env.example, .gitignore, README.md
 ```
@@ -112,7 +126,7 @@ Makefile, .env.example, .gitignore, README.md
   `.env.example`, `scripts/smoke.sh`. Проверка: `curl /health`.
 - [x] 1.3 Postgres: pgxpool, goose + `00001_init.sql` (tasks, tags, task_tags, notes), миграции на
   старте. Проверка: сервис стартует с `DATABASE_URL`, таблицы созданы.
-- [ ] 1.4 Auth: `internal/auth`, подключение на `/v1`, юнит-тест. Проверка: `go test ./...`,
+- [x] 1.4 Auth: `internal/auth`, подключение на `/v1`, юнит-тест. Проверка: `go test ./...`,
   без заголовка → 401.
 
 ### Шаг 2. Теги
@@ -138,4 +152,6 @@ Makefile, .env.example, .gitignore, README.md
 - 2026-09-26: 1.2 закоммичен. Неизвестный роут/метод → 404/405 тоже в обёртке.
 - 2026-09-26: 1.3 закоммичен. Локальная БД: brew `postgresql@18`, база `teriyaki`
   (`DATABASE_URL=postgres://localhost:5432/teriyaki?sslmode=disable`, юзер ОС без пароля).
-- 2026-09-27: сделан 1.4, ждёт коммита. Добавлен `GET /v1/me`.
+- 2026-09-27: 1.4 закоммичен. Добавлен `GET /v1/me`.
+- 2026-09-27: сделан 2.1, ждёт коммита. smoke.sh переписан: проверяет код ответа + jq,
+  идемпотентен (уникальные имена).

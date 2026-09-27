@@ -3,14 +3,19 @@ package repository
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io/fs"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 )
+
+// Код ошибки Postgres unique_violation.
+const _uniqueViolation = "23505"
 
 //go:embed migrations/*.sql
 var _migrations embed.FS
@@ -45,4 +50,9 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 
 	return nil
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == _uniqueViolation
 }
