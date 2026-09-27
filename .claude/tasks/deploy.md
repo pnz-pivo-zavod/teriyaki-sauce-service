@@ -15,6 +15,7 @@ Actions ▸ deploy (кнопка, тег) ─ssh deploy@VPS─► /opt/teriyaki:
 
 ## Решения
 
+- Гайд по деплою (runbook) — в Confluence, не в репо: https://practiceilya.atlassian.net/wiki/spaces/~7120207c4bac83d9994bb493c9716a0b74c5f6/pages/22446081 . `deploy/README.md` удалён.
 - VPS: Ubuntu/Debian amd64. Postgres уже стоит на хосте.
 - Своего домена нет → бесплатный поддомен DuckDNS (`<имя>.duckdns.org` → IP VPS), Caddy получает
   на него сертификат Let's Encrypt. Переезд на свой домен — сменить `DOMAIN` в `caddy.env`.
@@ -68,7 +69,7 @@ Actions ▸ deploy (кнопка, тег) ─ssh deploy@VPS─► /opt/teriyaki:
   scp конфига, compose up, проверка /health).
 - [ ] 6.4 Первый деплой (руками по runbook): сервер, секреты Environment, пакет public, запуск deploy.
   Проверка: `/health` 200, `/v1/me` без заголовка 401, `/docs` просит пароль, дамп появился.
-- [ ] 6.5 Доки: раздел «Деплой» в корневом README со ссылкой на `deploy/README.md`.
+- [ ] 6.5 Доки: раздел «Деплой» в корневом README со ссылкой на гайд в Confluence.
 
 ## Что нужно от пользователя (6.4)
 
@@ -94,3 +95,4 @@ Actions ▸ deploy (кнопка, тег) ─ssh deploy@VPS─► /opt/teriyaki:
   чистые. Rollout-скрипт прогнан локально на OrbStack (кроме pull — образа в GHCR ещё нет): поймана
   и исправлена проблема single-file mount Caddyfile (перенесён в deploy/caddy/). SSH-часть
   реально не проверена — только в 6.4.
+- 2026-09-27: гайд по деплою перенесён из `deploy/README.md` в Confluence (page 22446081), файл удалён.

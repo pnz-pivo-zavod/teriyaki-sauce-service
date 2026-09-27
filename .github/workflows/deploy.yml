@@ -1,7 +1,7 @@
 name: deploy
 
 # Выкатка на VPS кнопкой: Actions ▸ deploy ▸ Run workflow. Откат — тот же запуск с предыдущим
-# sha-<short>. Настройка сервера и Environment production — deploy/README.md.
+# sha-<short>. Настройка сервера и Environment production — Confluence «Деплой на VPS» (page 22446081).
 on:
   workflow_dispatch:
     inputs:
