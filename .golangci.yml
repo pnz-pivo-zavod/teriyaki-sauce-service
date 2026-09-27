@@ -1,0 +1,15 @@
+version: "2"
+
+linters:
+  # standard: errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - bodyclose
+    - errname
+    - errorlint
+    - gosec
+    - lll
+  settings:
+    lll:
+      # Жёсткий лимит из кодстайла, мягкий (99) — на ревью.
+      line-length: 180

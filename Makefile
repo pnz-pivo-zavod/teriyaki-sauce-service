@@ -1,7 +1,7 @@
 -include .env
 export
 
-.PHONY: run build lint smoke docker
+.PHONY: run build lint smoke docker hooks
 
 IMAGE ?= teriyaki-sauce-service
 
@@ -19,3 +19,7 @@ smoke:
 
 docker:
 	docker build -t $(IMAGE) .
+
+# Ставит git-хуки из lefthook.yml.
+hooks:
+	go tool -modfile=tools/go.mod lefthook install

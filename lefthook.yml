@@ -1,0 +1,47 @@
+# Git-хуки. Установка: make hooks. Пропустить разово: LEFTHOOK=0 git commit ...
+# Инструменты (кроме golangci-lint) запинены в tools/go.mod и запускаются через go tool.
+
+pre-commit:
+  piped: true
+  jobs:
+    # Сначала форматирование — остальные проверки видят уже исправленные файлы.
+    - name: goimports
+      glob: "*.go"
+      run: go tool -modfile=tools/go.mod goimports -local teriyaki-sauce-service -w {staged_files}
+      stage_fixed: true
+
+    - name: checks
+      group:
+        parallel: true
+        jobs:
+          - name: gitleaks
+            run: go tool -modfile=tools/go.mod gitleaks git --staged --redact --no-banner
+
+          - name: golangci-lint
+            glob: "*.go"
+            run: golangci-lint run --new-from-rev=HEAD ./...
+
+          - name: go mod tidy
+            glob: ["*.go", "go.mod", "go.sum"]
+            run: go mod tidy -diff
+
+          - name: go test
+            glob: ["*.go", "*.sql", "go.mod", "go.sum", "api/*"]
+            run: go test ./...
+
+          - name: govulncheck
+            glob: ["*.go", "go.mod", "go.sum"]
+            run: go tool -modfile=tools/go.mod govulncheck ./...
+
+commit-msg:
+  jobs:
+    - name: conventional commits
+      run: |
+        msg="$(head -n1 {1})"
+        pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
+        if ! printf '%s' "$msg" | grep -qE "$pattern" && ! printf '%s' "$msg" | grep -qE '^(Merge|Revert) '; then
+          echo "commit message не в формате Conventional Commits: $msg"
+          echo "ожидается: <type>(<scope>)?: <описание>, type — feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+          echo "пример: feat(tasks): фильтр по isCompleted"
+          exit 1
+        fi

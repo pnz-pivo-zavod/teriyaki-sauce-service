@@ -1,0 +1,22 @@
+# Стандартные правила gitleaks + секреты этого сервиса, которые стандартные не ловят.
+
+[extend]
+useDefault = true
+
+# Стандартное правило Telegram срабатывает только рядом со словом "telegram",
+# а у нас токен лежит в BOT_TOKEN.
+[[rules]]
+id = "telegram-bot-token-format"
+description = "Telegram bot token"
+regex = '''\b\d{8,10}:[A-Za-z0-9_-]{35}\b'''
+
+[[rules]]
+id = "postgres-url-password"
+description = "Password in Postgres connection URL"
+regex = '''postgres(?:ql)?://[^:/@\s]+:([^@\s]+)@'''
+secretGroup = 1
+
+  # Плейсхолдеры из README/примеров.
+  [[rules.allowlists]]
+  regexTarget = "secret"
+  regexes = ['''^(pass|password|postgres|secret|changeme)$''']

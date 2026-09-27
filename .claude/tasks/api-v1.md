@@ -42,6 +42,10 @@
 - OpenAPI-спецификация `api/openapi.yaml` — источник для генерации клиентов фронтом. Меняешь роут или
   контракт → правишь спеку в том же подпункте (тест `TestOpenAPIMatchesRouter` ловит расхождение
   роутов, но не полей). Scalar запинен на версию (`@scalar/api-reference@1.72.1`).
+- Git-хуки — lefthook, состав выбран пользователем: pre-commit = goimports (фикс) → gitleaks,
+  golangci-lint на дифф, go mod tidy -diff, go test, govulncheck; commit-msg = Conventional
+  Commits; pre-push нет. Dev-инструменты — отдельный модуль `tools/go.mod`, чтобы не засорять
+  go.mod сервиса; golangci-lint — системный (не через go tool, так рекомендуют авторы).
 - CORS allow-all (минимальный middleware, разрешён заголовок `Authorization`).
 
 ### Авторизация
@@ -165,9 +169,12 @@ Makefile, .env.example, .gitignore, README.md
   auth для фронта, отличия от Confluence-доки (обёртка, id везде, tagIds, API тегов, фильтры).
 - [x] 5.2 Docker: multi-stage `Dockerfile` (golang:1.27 → distroless static nonroot),
   `.dockerignore`, `make docker`, раздел в README (запуск с `--network host` к Postgres хоста).
-- [ ] 5.3 OpenAPI + Scalar: `api/openapi.yaml` (OpenAPI 3.0, руками) и `api/docs.html` (Scalar с CDN),
+- [x] 5.3 OpenAPI + Scalar: `api/openapi.yaml` (OpenAPI 3.0, руками) и `api/docs.html` (Scalar с CDN),
   вшиты пакетом `api`, роуты `/openapi.yaml` и `/docs` без авторизации; тест в router сверяет
   спеку с роутами chi и валидирует её (kin-openapi).
+- [ ] 5.4 Git-хуки (lefthook): `lefthook.yml`, `.golangci.yml` (standard + bodyclose, errname,
+  errorlint, gosec, lll 180), `.gitleaks.toml`, `tools/go.mod` (lefthook, gitleaks, govulncheck,
+  goimports через `go tool -modfile`), `make hooks`, раздел в README.
 
 ## Журнал
 
@@ -195,3 +202,5 @@ Makefile, .env.example, .gitignore, README.md
 - 2026-09-27: 5.3 по запросу — OpenAPI + Scalar. Спека проходит kin-openapi, Redocly lint
   (2 warning: нет license, у /health нет 4xx) и генерацию openapi-typescript. Рендер Scalar в
   браузере не проверялся.
+- 2026-09-27: 5.3 закоммичен. Сделан 5.4 (хуки), ждёт коммита. Хуки уже установлены в .git/hooks —
+  коммит 5.4 сам пройдёт через них, сообщение нужно в формате Conventional Commits.

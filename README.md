@@ -36,6 +36,28 @@ make smoke                                  # против http://localhost:8080
 BASE_URL=http://host:8080 ./scripts/smoke.sh
 ```
 
+## Git-хуки
+
+После клонирования: `make hooks` (ставит [lefthook](https://lefthook.dev) из `tools/go.mod`).
+Нужен установленный `golangci-lint`, остальные инструменты запинены в `tools/go.mod`.
+
+**pre-commit** — сначала `goimports` на застейдженных .go (исправления попадают в коммит), затем
+параллельно:
+
+| Проверка | Когда |
+|---|---|
+| gitleaks — секреты в застейдженном (`.gitleaks.toml`: + токен бота, пароль в postgres-URL) | всегда |
+| `golangci-lint` на дифф (`.golangci.yml`) | .go |
+| `go mod tidy -diff` | .go, go.mod/go.sum |
+| `go test ./...` (в т.ч. сверка openapi.yaml с роутами) | .go, .sql, go.mod/go.sum, api/ |
+| govulncheck | .go, go.mod/go.sum |
+
+**commit-msg** — [Conventional Commits](https://www.conventionalcommits.org/ru/):
+`<type>(<scope>)?: <описание>`, например `feat(tasks): фильтр по isCompleted`. Типы:
+feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert. Merge/Revert от git пропускаются.
+
+Пропустить хуки разово: `LEFTHOOK=0 git commit ...`.
+
 ## OpenAPI и Scalar
 
 - `api/openapi.yaml` — спецификация OpenAPI 3.0, вшита в бинарник.
