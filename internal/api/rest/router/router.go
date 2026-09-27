@@ -40,6 +40,9 @@ func New(
 		r.Post("/task", task.Create)
 		r.Get("/task/{id}", task.Get)
 		r.Get("/tasks", task.List)
+		r.Put("/task/{id}", task.Update)
+		r.Patch("/task/{id}/complete", task.Complete)
+		r.Delete("/task/{id}", task.Delete)
 	})
 
 	return r

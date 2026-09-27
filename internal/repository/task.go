@@ -19,8 +19,16 @@ var (
 	_taskGetSQL string
 	//go:embed queries/task/list.sql
 	_taskListSQL string
+	//go:embed queries/task/update.sql
+	_taskUpdateSQL string
+	//go:embed queries/task/complete.sql
+	_taskCompleteSQL string
+	//go:embed queries/task/delete.sql
+	_taskDeleteSQL string
 	//go:embed queries/task/add_tags.sql
 	_taskAddTagsSQL string
+	//go:embed queries/task/delete_tags.sql
+	_taskDeleteTagsSQL string
 )
 
 // TaskRepository — задачи в Postgres.
@@ -88,6 +96,53 @@ func (r *TaskRepository) List(ctx context.Context, userID int64, f model.TaskFil
 	}
 
 	return tasks, nil
+}
+
+// Update полностью перезаписывает задачу и её теги в одной транзакции.
+// Нет задачи → model.ErrNotFound; in.TagIDs — как в Create.
+func (r *TaskRepository) Update(ctx context.Context, userID, id int64, in model.TaskInput) error {
+	return pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		res, err := tx.Exec(ctx, _taskUpdateSQL,
+			id, userID, in.Name, in.Description, in.Date, in.NotifyAt, in.Priority, in.IsCompleted,
+		)
+		if err != nil {
+			return fmt.Errorf("update task: %w", err)
+		}
+
+		if res.RowsAffected() == 0 {
+			return fmt.Errorf("task %d %w", id, model.ErrNotFound)
+		}
+
+		if _, err := tx.Exec(ctx, _taskDeleteTagsSQL, id); err != nil {
+			return fmt.Errorf("delete task tags: %w", err)
+		}
+
+		return addTags(ctx, tx, userID, id, in.TagIDs)
+	})
+}
+
+// Complete помечает задачу завершённой. Нет задачи → model.ErrNotFound.
+func (r *TaskRepository) Complete(ctx context.Context, userID, id int64) error {
+	return r.execOne(ctx, _taskCompleteSQL, "complete", userID, id)
+}
+
+// Delete удаляет задачу вместе с заметками и привязками тегов. Нет задачи → model.ErrNotFound.
+func (r *TaskRepository) Delete(ctx context.Context, userID, id int64) error {
+	return r.execOne(ctx, _taskDeleteSQL, "delete", userID, id)
+}
+
+// execOne выполняет запрос с параметрами (id, userID), 0 затронутых строк → model.ErrNotFound.
+func (r *TaskRepository) execOne(ctx context.Context, sql, op string, userID, id int64) error {
+	res, err := r.db.Exec(ctx, sql, id, userID)
+	if err != nil {
+		return fmt.Errorf("%s task: %w", op, err)
+	}
+
+	if res.RowsAffected() == 0 {
+		return fmt.Errorf("task %d %w", id, model.ErrNotFound)
+	}
+
+	return nil
 }
 
 func addTags(ctx context.Context, tx pgx.Tx, userID, taskID int64, tagIDs []int64) error {

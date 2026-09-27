@@ -72,6 +72,62 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, tasks)
 }
 
+// Update — PUT /v1/task/{id}.
+func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	var in model.TaskInput
+	if err := decode(r, &in); err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	task, err := h.svc.Update(r.Context(), auth.UserID(r.Context()), id, in)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, task)
+}
+
+// Complete — PATCH /v1/task/{id}/complete.
+func (h *TaskHandler) Complete(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	task, err := h.svc.Complete(r.Context(), auth.UserID(r.Context()), id)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, task)
+}
+
+// Delete — DELETE /v1/task/{id}.
+func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	if err := h.svc.Delete(r.Context(), auth.UserID(r.Context()), id); err != nil {
+		writeError(w, r, err)
+		return
+	}
+
+	response.JSON(w, http.StatusOK, nil)
+}
+
 func parseTaskFilter(r *http.Request) (model.TaskFilter, error) {
 	var (
 		f   model.TaskFilter

@@ -74,6 +74,7 @@ check "get task" 200 ".data.id == $TASK_ID and .data.tags[0].id == $TASK_TAG_ID 
 	GET "/v1/task/$TASK_ID"
 check "create task without optional fields" 201 '.data.priority == 0 and .data.tags == [] and .data.date == null' \
 	POST /v1/task '{"name":"bare"}'
+BARE_ID="$(last .data.id)"
 check "create task: unknown tag -> 400" 400 '.error == "tagIds contain unknown tags"' \
 	POST /v1/task '{"name":"x","tagIds":[999999999]}'
 check "create task: blank name -> 400" 400 '.error == "name is required"' POST /v1/task '{"name":" "}'
@@ -123,3 +124,39 @@ check "list: end <= start -> 400" 400 '.error == "endDate must be after startDat
 	GET "/v1/tasks?startDate=2026-10-02T00:00:00Z&endDate=2026-10-01T00:00:00Z"
 check "list: bad isCompleted -> 400" 400 '.error != null' GET "/v1/tasks?isCompleted=yes"
 check "list: cleanup tag" 200 '.error == null' DELETE "/v1/tag/$LIST_TAG_ID"
+
+# Изменение задач
+check "update: tag" 201 '.data.id > 0' POST /v1/tag "{\"name\":\"$TAG-upd-task\"}"
+UPD_TAG_ID="$(last .data.id)"
+check "update: create task" 201 '.data.id > 0' POST /v1/task \
+	"{\"name\":\"u\",\"description\":\"d\",\"date\":\"2026-10-01T10:00:00Z\",\"priority\":3,
+	\"notifyAt\":\"2026-10-01T09:00:00Z\",\"tagIds\":[$UPD_TAG_ID]}"
+UPD_ID="$(last .data.id)"
+check "update: full replace clears omitted fields, sets isCompleted, ignores notes" 200 \
+	".data.id == $UPD_ID and .data.name == \"u2\" and .data.description == null and .data.date == null
+	and .data.notifyAt == null and .data.priority == 0 and .data.isCompleted == true
+	and .data.tags == [] and .data.notes == []" \
+	PUT "/v1/task/$UPD_ID" '{"name":" u2 ","isCompleted":true,"notes":[{"text":"ignored"}]}'
+check "update: set tags" 200 ".data.tags[0].id == $UPD_TAG_ID and .data.isCompleted == false" \
+	PUT "/v1/task/$UPD_ID" "{\"name\":\"u3\",\"tagIds\":[$UPD_TAG_ID]}"
+check "update: unknown tag -> 400" 400 '.error == "tagIds contain unknown tags"' \
+	PUT "/v1/task/$UPD_ID" '{"name":"broken","tagIds":[999999999]}'
+check "update: rolled back after 400" 200 ".data.name == \"u3\" and .data.tags[0].id == $UPD_TAG_ID" \
+	GET "/v1/task/$UPD_ID"
+check "update: blank name -> 400" 400 '.error == "name is required"' PUT "/v1/task/$UPD_ID" '{"name":""}'
+check "update: missing task -> 404" 404 '.error != null' PUT /v1/task/999999999 '{"name":"x"}'
+check "complete" 200 ".data.id == $UPD_ID and .data.isCompleted == true and .data.name == \"u3\"" \
+	PATCH "/v1/task/$UPD_ID/complete"
+check "complete: idempotent" 200 '.data.isCompleted == true' PATCH "/v1/task/$UPD_ID/complete"
+check "complete: shows in isCompleted=true" 200 "$(has "$UPD_ID")" GET "/v1/tasks?isCompleted=true"
+check "complete: missing task -> 404" 404 '.error != null' PATCH /v1/task/999999999/complete
+check "delete task" 200 '.data == null and .error == null' DELETE "/v1/task/$UPD_ID"
+check "delete task: get -> 404" 404 '.error != null' GET "/v1/task/$UPD_ID"
+check "delete task: again -> 404" 404 '.error != null' DELETE "/v1/task/$UPD_ID"
+check "delete task: tag survives" 200 "any(.data[]; .id == $UPD_TAG_ID)" GET /v1/tags
+
+# Уборка: задачи и теги, созданные прогоном.
+for id in "$TASK_ID" "$BARE_ID" "$T1" "$T2" "$T3"; do
+	check "cleanup task $id" 200 '.error == null' DELETE "/v1/task/$id"
+done
+check "cleanup tag" 200 '.error == null' DELETE "/v1/tag/$UPD_TAG_ID"

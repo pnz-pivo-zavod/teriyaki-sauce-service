@@ -77,6 +77,36 @@ func (s *TaskService) List(ctx context.Context, userID int64, f model.TaskFilter
 	return s.fill(ctx, tasks)
 }
 
+// Update полностью заменяет задачу (включая теги и isCompleted) и возвращает её целиком.
+func (s *TaskService) Update(
+	ctx context.Context, userID, id int64, in model.TaskInput,
+) (model.Task, error) {
+	in, err := validateTask(in)
+	if err != nil {
+		return model.Task{}, err
+	}
+
+	if err := s.tasks.Update(ctx, userID, id, in); err != nil {
+		return model.Task{}, err
+	}
+
+	return s.Get(ctx, userID, id)
+}
+
+// Complete помечает задачу завершённой (идемпотентно) и возвращает её целиком.
+func (s *TaskService) Complete(ctx context.Context, userID, id int64) (model.Task, error) {
+	if err := s.tasks.Complete(ctx, userID, id); err != nil {
+		return model.Task{}, err
+	}
+
+	return s.Get(ctx, userID, id)
+}
+
+// Delete удаляет задачу пользователя.
+func (s *TaskService) Delete(ctx context.Context, userID, id int64) error {
+	return s.tasks.Delete(ctx, userID, id)
+}
+
 // fill подгружает теги задач одним запросом. tags и notes всегда не nil.
 func (s *TaskService) fill(ctx context.Context, tasks []model.Task) ([]model.Task, error) {
 	if len(tasks) == 0 {
