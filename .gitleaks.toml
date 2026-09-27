@@ -16,7 +16,7 @@ description = "Password in Postgres connection URL"
 regex = '''postgres(?:ql)?://[^:/@\s]+:([^@\s]+)@'''
 secretGroup = 1
 
-  # Плейсхолдеры из README/примеров.
+  # Плейсхолдеры из README/примеров: pass, changeme, <пароль> и т.п.
   [[rules.allowlists]]
   regexTarget = "secret"
-  regexes = ['''^(pass|password|postgres|secret|changeme)$''']
+  regexes = ['''^(pass|password|postgres|secret|changeme)$''', '''^<[^>]*>$''']
