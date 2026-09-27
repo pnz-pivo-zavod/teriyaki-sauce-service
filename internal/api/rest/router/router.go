@@ -29,6 +29,8 @@ func New(
 	})
 
 	r.Get("/health", handler.Health)
+	r.Get("/openapi.yaml", handler.OpenAPI)
+	r.Get("/docs", handler.Docs)
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Use(auth)

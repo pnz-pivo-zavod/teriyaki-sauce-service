@@ -1,0 +1,669 @@
+openapi: 3.0.3
+info:
+  title: teriyaki-sauce-service API
+  version: 1.0.0
+  description: |
+    Бэкенд таск-трекера для Telegram Mini App: задачи, теги, заметки.
+
+    **Авторизация.** Все роуты `/v1/*` требуют заголовок `Authorization: tma <initData>`,
+    где initData — `window.Telegram.WebApp.initData`. Подпись проверяется токеном бота,
+    `auth_date` не старше 24 часов. Данные у каждого пользователя свои: чужая запись → 404.
+    На dev-стенде с `DEV_USER_ID` заголовок не нужен.
+
+    **Формат ответа.** Любой ответ — обёртка `{"data": ..., "error": null}`,
+    ошибка — `{"data": null, "error": "текст"}`.
+
+    **Время** — RFC3339, в ответах всегда UTC. Необязательные пустые поля в ответе опускаются,
+    `tags` и `notes` — всегда массивы. Строки `name`/`text` обрезаются по краям, пустые → 400.
+
+servers:
+  - url: /
+    description: Текущий сервер
+
+tags:
+  - name: tasks
+    description: Задачи
+  - name: notes
+    description: Заметки к задачам
+  - name: tags
+    description: Теги пользователя
+  - name: system
+    description: Служебные роуты
+
+security:
+  - tma: []
+
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: health
+      summary: Сервис жив
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthEnvelope"
+
+  /v1/me:
+    get:
+      tags: [system]
+      operationId: getMe
+      summary: Текущий пользователь
+      description: Проверка, что авторизация с фронта работает.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/task:
+    post:
+      tags: [tasks]
+      operationId: createTask
+      summary: Создать задачу
+      description: |
+        Новая задача всегда `isCompleted: false`. Чужой или несуществующий тег в `tagIds` → 400,
+        задача не создаётся.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreateInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/task/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    get:
+      tags: [tasks]
+      operationId: getTask
+      summary: Достать задачу
+      responses:
+        "200":
+          $ref: "#/components/responses/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+    put:
+      tags: [tasks]
+      operationId: updateTask
+      summary: Редактировать задачу (полная замена)
+      description: |
+        **Полная замена.** Поле, которого нет в запросе, очищается: `description`, `date`,
+        `notifyAt`, `tagIds`; `priority` → 0, `isCompleted` → false. Чтобы поменять одно поле —
+        отправить всю задачу. Заметки не меняются — для них `/v1/note`.
+        При ошибке в `tagIds` задача не меняется.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdateInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+    delete:
+      tags: [tasks]
+      operationId: deleteTask
+      summary: Удалить задачу
+      description: Заметки задачи удаляются вместе с ней, теги остаются.
+      responses:
+        "200":
+          $ref: "#/components/responses/Empty"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/task/{id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    patch:
+      tags: [tasks]
+      operationId: completeTask
+      summary: Пометить задачу завершённой
+      description: "Идемпотентно. Снять отметку — `PUT` с `isCompleted: false`."
+      responses:
+        "200":
+          $ref: "#/components/responses/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/tasks:
+    get:
+      tags: [tasks]
+      operationId: listTasks
+      summary: Список задач
+      description: |
+        Фильтры необязательны и комбинируются. Задачи без `date` при фильтре по дате не попадают.
+        Сортировка: по `date` (без даты — в конце), затем по `id`.
+
+        «Задачи на день» — `startDate` = полночь в часовом поясе пользователя.
+        `+` в смещении url-кодировать как `%2B` (URLSearchParams делает сам).
+      parameters:
+        - name: startDate
+          in: query
+          description: Начало интервала (включительно). Без `endDate` — ровно сутки `[startDate, startDate + 24h)`.
+          schema:
+            type: string
+            format: date-time
+          example: "2026-10-01T00:00:00+03:00"
+        - name: endDate
+          in: query
+          description: Конец интервала (не включается), должен быть позже `startDate`.
+          schema:
+            type: string
+            format: date-time
+        - name: isCompleted
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListEnvelope"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/note:
+    post:
+      tags: [notes]
+      operationId: createNote
+      summary: Добавить заметку к задаче
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Note"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Задача не найдена или чужая
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/note/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    put:
+      tags: [notes]
+      operationId: updateNote
+      summary: Редактировать заметку
+      description: Другой `taskId` переносит заметку в эту задачу. `date` не меняется.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Note"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Нет заметки или целевой задачи
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          $ref: "#/components/responses/Internal"
+    delete:
+      tags: [notes]
+      operationId: deleteNote
+      summary: Удалить заметку
+      responses:
+        "200":
+          $ref: "#/components/responses/Empty"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/tag:
+    post:
+      tags: [tags]
+      operationId: createTag
+      summary: Создать тег
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagInput"
+      responses:
+        "201":
+          $ref: "#/components/responses/Tag"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/tags:
+    get:
+      tags: [tags]
+      operationId: listTags
+      summary: Теги пользователя
+      description: Отсортированы по имени.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TagListEnvelope"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/tag/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ID"
+    put:
+      tags: [tags]
+      operationId: updateTag
+      summary: Редактировать тег (полная замена)
+      description: Без `color` цвет сбрасывается.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagInput"
+      responses:
+        "200":
+          $ref: "#/components/responses/Tag"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/Internal"
+    delete:
+      tags: [tags]
+      operationId: deleteTag
+      summary: Удалить тег
+      description: Тег снимается со всех задач.
+      responses:
+        "200":
+          $ref: "#/components/responses/Empty"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+components:
+  securitySchemes:
+    tma:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "`tma <initData>`, где initData — `window.Telegram.WebApp.initData`."
+
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+  responses:
+    Task:
+      description: Задача
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TaskEnvelope"
+    Note:
+      description: Заметка
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/NoteEnvelope"
+    Tag:
+      description: Тег
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/TagEnvelope"
+    Empty:
+      description: Успех без тела
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/EmptyEnvelope"
+    BadRequest:
+      description: Невалидный JSON, параметры или поля
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized:
+      description: Нет или невалидный Authorization
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Нет записи или она чужая
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: Тег с таким именем уже есть
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Internal:
+      description: Внутренняя ошибка
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    Priority:
+      type: integer
+      enum: [0, 1, 2, 3]
+      description: 0 — нет, 1 — low, 2 — medium, 3 — high.
+
+    Task:
+      type: object
+      required: [id, name, priority, isCompleted, tags, notes]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+          format: date-time
+        notifyAt:
+          type: string
+          format: date-time
+          description: Только хранится, уведомления пока не отправляются.
+        priority:
+          $ref: "#/components/schemas/Priority"
+        isCompleted:
+          type: boolean
+        tags:
+          type: array
+          description: По имени.
+          items:
+            $ref: "#/components/schemas/Tag"
+        notes:
+          type: array
+          description: По времени создания.
+          items:
+            $ref: "#/components/schemas/Note"
+
+    TaskCreateInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        date:
+          type: string
+          format: date-time
+        notifyAt:
+          type: string
+          format: date-time
+        priority:
+          $ref: "#/components/schemas/Priority"
+        tagIds:
+          type: array
+          description: ID своих тегов, дубли схлопываются.
+          items:
+            type: integer
+            format: int64
+
+    TaskUpdateInput:
+      allOf:
+        - $ref: "#/components/schemas/TaskCreateInput"
+        - type: object
+          properties:
+            isCompleted:
+              type: boolean
+
+    Note:
+      type: object
+      required: [id, taskId, text, date]
+      properties:
+        id:
+          type: integer
+          format: int64
+        taskId:
+          type: integer
+          format: int64
+        text:
+          type: string
+        date:
+          type: string
+          format: date-time
+          description: Время создания, при редактировании не меняется.
+
+    NoteInput:
+      type: object
+      required: [taskId, text]
+      properties:
+        taskId:
+          type: integer
+          format: int64
+          minimum: 1
+        text:
+          type: string
+          minLength: 1
+
+    Tag:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+    TagInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: Уникально у пользователя.
+        color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+
+    ErrorEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          type: object
+          nullable: true
+          description: Всегда null.
+        error:
+          type: string
+
+    EmptyEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          type: object
+          nullable: true
+          description: Всегда null.
+        error:
+          $ref: "#/components/schemas/NoError"
+
+    NoError:
+      type: string
+      nullable: true
+      description: При успехе всегда null.
+
+    HealthEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          type: string
+          enum: [ok]
+        error:
+          $ref: "#/components/schemas/NoError"
+
+    MeEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          type: object
+          required: [userId]
+          properties:
+            userId:
+              type: integer
+              format: int64
+        error:
+          $ref: "#/components/schemas/NoError"
+
+    TaskEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          $ref: "#/components/schemas/Task"
+        error:
+          $ref: "#/components/schemas/NoError"
+
+    TaskListEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        error:
+          $ref: "#/components/schemas/NoError"
+
+    NoteEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          $ref: "#/components/schemas/Note"
+        error:
+          $ref: "#/components/schemas/NoError"
+
+    TagEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          $ref: "#/components/schemas/Tag"
+        error:
+          $ref: "#/components/schemas/NoError"
+
+    TagListEnvelope:
+      type: object
+      required: [data, error]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tag"
+        error:
+          $ref: "#/components/schemas/NoError"

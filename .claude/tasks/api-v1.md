@@ -39,6 +39,9 @@
   таймзоны сервера.
 - Деплой — Docker-образ на distroless `static-debian12:nonroot` (UID 65532, без shell).
   Postgres на хосте → контейнер в `--network host`.
+- OpenAPI-спецификация `api/openapi.yaml` — источник для генерации клиентов фронтом. Меняешь роут или
+  контракт → правишь спеку в том же подпункте (тест `TestOpenAPIMatchesRouter` ловит расхождение
+  роутов, но не полей). Scalar запинен на версию (`@scalar/api-reference@1.72.1`).
 - CORS allow-all (минимальный middleware, разрешён заголовок `Authorization`).
 
 ### Авторизация
@@ -162,6 +165,9 @@ Makefile, .env.example, .gitignore, README.md
   auth для фронта, отличия от Confluence-доки (обёртка, id везде, tagIds, API тегов, фильтры).
 - [x] 5.2 Docker: multi-stage `Dockerfile` (golang:1.27 → distroless static nonroot),
   `.dockerignore`, `make docker`, раздел в README (запуск с `--network host` к Postgres хоста).
+- [ ] 5.3 OpenAPI + Scalar: `api/openapi.yaml` (OpenAPI 3.0, руками) и `api/docs.html` (Scalar с CDN),
+  вшиты пакетом `api`, роуты `/openapi.yaml` и `/docs` без авторизации; тест в router сверяет
+  спеку с роутами chi и валидирует её (kin-openapi).
 
 ## Журнал
 
@@ -186,3 +192,6 @@ Makefile, .env.example, .gitignore, README.md
 - 2026-09-27: страница API в Confluence (425986) обновлена до v6 под реализацию: разделы «Общее»
   (авторизация, обёртка, коды, время, модели) и «Теги», уточнения по фильтрам/PUT/заметкам.
   Inline-комментарий на «Создать таску» сохранён. README ссылается на неё как на актуальную.
+- 2026-09-27: 5.3 по запросу — OpenAPI + Scalar. Спека проходит kin-openapi, Redocly lint
+  (2 warning: нет license, у /health нет 4xx) и генерацию openapi-typescript. Рендер Scalar в
+  браузере не проверялся.

@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"teriyaki-sauce-service/api"
 	"teriyaki-sauce-service/internal/api/rest/response"
 	"teriyaki-sauce-service/internal/auth"
 	"teriyaki-sauce-service/internal/model"
@@ -22,6 +23,23 @@ func Health(w http.ResponseWriter, _ *http.Request) {
 // Me возвращает ID текущего пользователя — для проверки авторизации с фронта.
 func Me(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, map[string]int64{"userId": auth.UserID(r.Context())})
+}
+
+// OpenAPI отдаёт OpenAPI-спецификацию — для генерации клиентов и Scalar.
+func OpenAPI(w http.ResponseWriter, _ *http.Request) {
+	writeRaw(w, "application/yaml", api.Spec)
+}
+
+// Docs отдаёт интерактивную документацию Scalar.
+func Docs(w http.ResponseWriter, _ *http.Request) {
+	writeRaw(w, "text/html; charset=utf-8", api.DocsHTML)
+}
+
+func writeRaw(w http.ResponseWriter, contentType string, body []byte) {
+	w.Header().Set("Content-Type", contentType)
+	if _, err := w.Write(body); err != nil {
+		log.Error().Err(err).Msg("write response")
+	}
 }
 
 func decode(r *http.Request, v any) error {

@@ -36,6 +36,23 @@ make smoke                                  # против http://localhost:8080
 BASE_URL=http://host:8080 ./scripts/smoke.sh
 ```
 
+## OpenAPI и Scalar
+
+- `api/openapi.yaml` — спецификация OpenAPI 3.0, вшита в бинарник.
+- `GET /openapi.yaml` — отдаёт её (без авторизации): для генерации клиентов.
+- `GET /docs` — интерактивная документация [Scalar](https://scalar.com): описание роутов и
+  отправка запросов из браузера. Для `/v1/*` в Scalar в Authentication указать
+  `tma <initData>`; на dev-стенде с `DEV_USER_ID` заголовок не нужен.
+
+Генерация типов на фронте, например:
+
+```sh
+npx openapi-typescript http://localhost:8080/openapi.yaml -o src/api/schema.d.ts
+```
+
+Спецификация поддерживается руками. `go test ./...` проверяет, что она валидна и описывает
+ровно те роуты, что есть в роутере: добавили роут и не описали (или наоборот) — тест падает.
+
 ## Docker
 
 Образ: сборка в `golang:1.27`, запуск в `gcr.io/distroless/static-debian12:nonroot`
