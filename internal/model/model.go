@@ -68,4 +68,10 @@ type (
 		Text   string    `json:"text"`
 		Date   time.Time `json:"date"`
 	}
+
+	// NoteInput — тело POST/PUT заметки. В PUT другой TaskID переносит заметку.
+	NoteInput struct {
+		TaskID int64  `json:"taskId"`
+		Text   string `json:"text"`
+	}
 )

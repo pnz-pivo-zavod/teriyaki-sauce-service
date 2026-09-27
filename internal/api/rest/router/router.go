@@ -14,7 +14,10 @@ import (
 
 // New собирает роутер со всеми middleware и маршрутами.
 func New(
-	auth func(http.Handler) http.Handler, tag *handler.TagHandler, task *handler.TaskHandler,
+	auth func(http.Handler) http.Handler,
+	tag *handler.TagHandler,
+	task *handler.TaskHandler,
+	note *handler.NoteHandler,
 ) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer, logRequests, cors)
@@ -43,6 +46,10 @@ func New(
 		r.Put("/task/{id}", task.Update)
 		r.Patch("/task/{id}/complete", task.Complete)
 		r.Delete("/task/{id}", task.Delete)
+
+		r.Post("/note", note.Create)
+		r.Put("/note/{id}", note.Update)
+		r.Delete("/note/{id}", note.Delete)
 	})
 
 	return r

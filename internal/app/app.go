@@ -52,16 +52,18 @@ func Run() error {
 	var (
 		tagRepo  = repository.NewTagRepository(pool)
 		taskRepo = repository.NewTaskRepository(pool)
+		noteRepo = repository.NewNoteRepository(pool)
 	)
 
 	var (
 		tagHandler  = handler.NewTagHandler(service.NewTagService(tagRepo))
 		taskHandler = handler.NewTaskHandler(service.NewTaskService(taskRepo, tagRepo))
+		noteHandler = handler.NewNoteHandler(service.NewNoteService(noteRepo))
 	)
 
 	log.Info().Str("addr", addr).Msg("http server started")
 
-	return rest.Run(addr, router.New(authMW, tagHandler, taskHandler))
+	return rest.Run(addr, router.New(authMW, tagHandler, taskHandler, noteHandler))
 }
 
 func newAuth() (func(http.Handler) http.Handler, error) {

@@ -155,8 +155,33 @@ check "delete task: get -> 404" 404 '.error != null' GET "/v1/task/$UPD_ID"
 check "delete task: again -> 404" 404 '.error != null' DELETE "/v1/task/$UPD_ID"
 check "delete task: tag survives" 200 "any(.data[]; .id == $UPD_TAG_ID)" GET /v1/tags
 
+# Заметки: к задачам T1/T2 из блока списка.
+check "create note" 201 ".data.id > 0 and .data.taskId == $T1 and .data.text == \"n1\" and .data.date != null" \
+	POST /v1/note "{\"taskId\":$T1,\"text\":\" n1 \"}"
+NOTE_ID="$(last .data.id)"
+NOTE_DATE="$(last .data.date)"
+check "create note: blank text -> 400" 400 '.error == "text is required"' \
+	POST /v1/note "{\"taskId\":$T1,\"text\":\" \"}"
+check "create note: no taskId -> 400" 400 '.error == "taskId is required"' POST /v1/note '{"text":"x"}'
+check "create note: missing task -> 404" 404 '.error != null' \
+	POST /v1/note '{"taskId":999999999,"text":"x"}'
+check "update note: text, date unchanged" 200 \
+	".data.id == $NOTE_ID and .data.taskId == $T1 and .data.text == \"n1-upd\" and .data.date == \"$NOTE_DATE\"" \
+	PUT "/v1/note/$NOTE_ID" "{\"taskId\":$T1,\"text\":\"n1-upd\"}"
+check "update note: move to other task" 200 ".data.taskId == $T2 and .data.text == \"moved\"" \
+	PUT "/v1/note/$NOTE_ID" "{\"taskId\":$T2,\"text\":\"moved\"}"
+check "update note: move to missing task -> 404" 404 '.error != null' \
+	PUT "/v1/note/$NOTE_ID" '{"taskId":999999999,"text":"x"}'
+check "update note: missing note -> 404" 404 '.error != null' \
+	PUT /v1/note/999999999 "{\"taskId\":$T1,\"text\":\"x\"}"
+check "delete note" 200 '.data == null and .error == null' DELETE "/v1/note/$NOTE_ID"
+check "delete note: again -> 404" 404 '.error != null' DELETE "/v1/note/$NOTE_ID"
+check "note for cascade" 201 '.data.id > 0' POST /v1/note "{\"taskId\":$T3,\"text\":\"cascade\"}"
+CASCADE_NOTE_ID="$(last .data.id)"
+
 # Уборка: задачи и теги, созданные прогоном.
 for id in "$TASK_ID" "$BARE_ID" "$T1" "$T2" "$T3"; do
 	check "cleanup task $id" 200 '.error == null' DELETE "/v1/task/$id"
 done
 check "cleanup tag" 200 '.error == null' DELETE "/v1/tag/$UPD_TAG_ID"
+check "cascade: note removed with its task" 404 '.error != null' DELETE "/v1/note/$CASCADE_NOTE_ID"
