@@ -1,0 +1,13 @@
+# HTTPS для {$DOMAIN}: сертификат Let's Encrypt Caddy получает и продлевает сам.
+# Переменные — из caddy.env.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Документация API — только по логину и паролю.
+	@docs path /docs /openapi.yaml
+	basic_auth @docs {
+		{$DOCS_USER} {$DOCS_PASSWORD_HASH}
+	}
+
+	reverse_proxy 127.0.0.1:8080
+}

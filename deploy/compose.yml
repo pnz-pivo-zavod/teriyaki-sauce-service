@@ -1,0 +1,36 @@
+# Прод: /opt/teriyaki/compose.yml. Копируется на сервер workflow deploy — на сервере не править.
+# APP_TAG — в /opt/teriyaki/.env (пишет deploy), секреты — app.env и caddy.env рядом (chmod 600).
+name: teriyaki
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  app:
+    image: ghcr.io/pnz-pivo-zavod/teriyaki-sauce-service:${APP_TAG:-latest}
+    # host-сеть: Postgres хоста доступен как localhost. Слушаем только loopback — наружу через Caddy.
+    network_mode: host
+    env_file: app.env
+    environment:
+      HTTP_ADDR: 127.0.0.1:8080
+    restart: unless-stopped
+    logging: *logging
+
+  caddy:
+    image: caddy:2.11
+    network_mode: host
+    env_file: caddy.env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data # сертификаты — не терять, иначе упрёмся в лимиты Let's Encrypt
+      - caddy_config:/config
+    depends_on: [app]
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:
