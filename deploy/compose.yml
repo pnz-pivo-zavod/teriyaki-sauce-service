@@ -1,4 +1,5 @@
-# Прод: /opt/teriyaki/compose.yml. Копируется на сервер workflow deploy — на сервере не править.
+# Прод: /opt/teriyaki/compose.yml и caddy/Caddyfile. Копируются на сервер workflow deploy — на
+# сервере не править.
 # APP_TAG — в /opt/teriyaki/.env (пишет deploy), секреты — app.env и caddy.env рядом (chmod 600).
 name: teriyaki
 
@@ -24,7 +25,9 @@ services:
     network_mode: host
     env_file: caddy.env
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Папка, а не файл: bind mount одного файла держит старый inode, и замена файла
+      # (scp, tar, редактор) не видна контейнеру.
+      - ./caddy:/etc/caddy:ro
       - caddy_data:/data # сертификаты — не терять, иначе упрёмся в лимиты Let's Encrypt
       - caddy_config:/config
     depends_on: [app]

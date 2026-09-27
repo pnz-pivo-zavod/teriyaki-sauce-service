@@ -12,5 +12,6 @@ keep=7
 install -d -o postgres -g postgres -m 700 "$dir"
 runuser -u postgres -- pg_dump -Fc -f "$dir/teriyaki-$(date +%F).dump" teriyaki
 
-# Удаляем всё, кроме $keep самых свежих.
+# Удаляем всё, кроме $keep самых свежих. Имена генерируем сами (без пробелов) — ls безопасен.
+# shellcheck disable=SC2012
 ls -1t "$dir"/teriyaki-*.dump | tail -n +"$((keep + 1))" | xargs -r rm --

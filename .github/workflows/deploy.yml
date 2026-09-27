@@ -1,0 +1,78 @@
+name: deploy
+
+# Выкатка на VPS кнопкой: Actions ▸ deploy ▸ Run workflow. Откат — тот же запуск с предыдущим
+# sha-<short>. Настройка сервера и Environment production — deploy/README.md.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег образа: latest или sha-<short> (откат)"
+        required: true
+        default: latest
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # не обрывать выкатку на середине
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.DOMAIN }}
+    env:
+      TAG: ${{ inputs.tag }}
+      TARGET: deploy@${{ vars.SSH_HOST }}
+      DOMAIN: ${{ vars.DOMAIN }}
+    steps:
+      - name: validate tag
+        run: |
+          if ! printf '%s' "$TAG" | grep -qE '^(latest|sha-[0-9a-f]{7,40})$'; then
+            echo "::error::тег должен быть latest или sha-<hex>, получено: $TAG"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - name: ssh key
+        env:
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: copy config
+        # tar, а не scp: заодно создаёт caddy/ при первом деплое.
+        run: tar -C deploy -cf - compose.yml caddy | ssh "$TARGET" tar -C /opt/teriyaki -xf -
+
+      - name: rollout
+        # $TAG подставляется локально — он уже проверен на шаге validate tag.
+        run: |
+          # shellcheck disable=SC2029 # раскрытие $TAG на стороне CI — намеренно
+          ssh "$TARGET" "set -e
+            cd /opt/teriyaki
+            echo \"было: \$(cat .env 2>/dev/null || echo -)\"
+            echo 'APP_TAG=$TAG' > .env
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+            docker image prune -f
+            docker compose ps"
+
+      - name: health check
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -fsS "https://$DOMAIN/health"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::https://$DOMAIN/health не ответил за минуту — docker compose logs app на сервере"
+          exit 1
