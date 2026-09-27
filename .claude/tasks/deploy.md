@@ -96,3 +96,6 @@ Actions ▸ deploy (кнопка, тег) ─ssh deploy@VPS─► /opt/teriyaki:
   и исправлена проблема single-file mount Caddyfile (перенесён в deploy/caddy/). SSH-часть
   реально не проверена — только в 6.4.
 - 2026-09-27: гайд по деплою перенесён из `deploy/README.md` в Confluence (page 22446081), файл удалён.
+- 2026-09-27: CI gitleaks упал на checksum mismatch: тег gitleaks v8.30.1 перевешен апстримом (8d1f98c →
+  83d9cd6, изменён только .goreleaser.yml), а локально GOPROXY=direct + GOSUMDB=off скачали новый тег
+  без сверки. В tools/go.sum — сумма из sum.golang.org. Урок: при GOSUMDB=off go.sum не проверен.
