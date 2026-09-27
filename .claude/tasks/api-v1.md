@@ -172,7 +172,7 @@ Makefile, .env.example, .gitignore, README.md
 - [x] 5.3 OpenAPI + Scalar: `api/openapi.yaml` (OpenAPI 3.0, руками) и `api/docs.html` (Scalar с CDN),
   вшиты пакетом `api`, роуты `/openapi.yaml` и `/docs` без авторизации; тест в router сверяет
   спеку с роутами chi и валидирует её (kin-openapi).
-- [ ] 5.4 Git-хуки (lefthook): `lefthook.yml`, `.golangci.yml` (standard + bodyclose, errname,
+- [x] 5.4 Git-хуки (lefthook): `lefthook.yml`, `.golangci.yml` (standard + bodyclose, errname,
   errorlint, gosec, lll 180), `.gitleaks.toml`, `tools/go.mod` (lefthook, gitleaks, govulncheck,
   goimports через `go tool -modfile`), `make hooks`, раздел в README.
 
@@ -202,5 +202,5 @@ Makefile, .env.example, .gitignore, README.md
 - 2026-09-27: 5.3 по запросу — OpenAPI + Scalar. Спека проходит kin-openapi, Redocly lint
   (2 warning: нет license, у /health нет 4xx) и генерацию openapi-typescript. Рендер Scalar в
   браузере не проверялся.
-- 2026-09-27: 5.3 закоммичен. Сделан 5.4 (хуки), ждёт коммита. Хуки уже установлены в .git/hooks —
+- 2026-09-27: 5.3 закоммичен. 5.4 (хуки) закоммичен. Хуки уже установлены в .git/hooks —
   коммит 5.4 сам пройдёт через них, сообщение нужно в формате Conventional Commits.
