@@ -21,3 +21,4 @@ check() {
 
 check "health" '.data == "ok" and .error == null' "$BASE_URL/health"
 check "unknown route" '.data == null and .error == "route not found"' "$BASE_URL/nope"
+check "me (DEV_USER_ID)" '.data.userId > 0' "$BASE_URL/v1/me"

@@ -13,7 +13,7 @@ import (
 )
 
 // New собирает роутер со всеми middleware и маршрутами.
-func New(h *handler.Handler) http.Handler {
+func New(h *handler.Handler, auth func(http.Handler) http.Handler) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer, logRequests, cors)
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
@@ -24,6 +24,12 @@ func New(h *handler.Handler) http.Handler {
 	})
 
 	r.Get("/health", h.Health)
+
+	r.Route("/v1", func(r chi.Router) {
+		r.Use(auth)
+
+		r.Get("/me", h.Me)
+	})
 
 	return r
 }

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
@@ -12,6 +14,7 @@ import (
 	"teriyaki-sauce-service/internal/api/rest"
 	"teriyaki-sauce-service/internal/api/rest/handler"
 	"teriyaki-sauce-service/internal/api/rest/router"
+	"teriyaki-sauce-service/internal/auth"
 	"teriyaki-sauce-service/internal/repository"
 )
 
@@ -45,9 +48,35 @@ func Run() error {
 		return fmt.Errorf("migrate: %w", err)
 	}
 
+	authMW, err := newAuth()
+	if err != nil {
+		return err
+	}
+
 	h := handler.New()
 
 	log.Info().Str("addr", addr).Msg("http server started")
 
-	return rest.Run(addr, router.New(h))
+	return rest.Run(addr, router.New(h, authMW))
+}
+
+func newAuth() (func(http.Handler) http.Handler, error) {
+	botToken := os.Getenv("BOT_TOKEN")
+
+	var devUserID int64
+	if v := os.Getenv("DEV_USER_ID"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id == 0 {
+			return nil, fmt.Errorf("DEV_USER_ID must be non-zero int64, got %q", v)
+		}
+
+		devUserID = id
+		log.Warn().Int64("user_id", devUserID).Msg("DEV_USER_ID set: initData validation disabled")
+	}
+
+	if botToken == "" && devUserID == 0 {
+		return nil, errors.New("BOT_TOKEN or DEV_USER_ID is required")
+	}
+
+	return auth.Middleware(botToken, devUserID), nil
 }

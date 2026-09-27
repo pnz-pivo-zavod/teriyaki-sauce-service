@@ -35,6 +35,9 @@
 
 - Заголовок `Authorization: tma <initData>`, проверка `telegoutil.ValidateWebAppData(BOT_TOKEN, …)`
   + `auth_date` не старше 24ч. User ID из поля `user` (JSON) кладётся в context.
+- `GET /v1/me` → `{userId}`: проверка авторизации с фронта (добавлен в 1.4; в chi middleware
+  группы не срабатывает, пока в ней нет роутов).
+- Без `BOT_TOKEN` и `DEV_USER_ID` сервис не стартует. Ошибка валидации → 401 с текстом причины.
 - `DEV_USER_ID` задан → проверка пропускается, используется этот ID (разработка вне Telegram).
 - Таблицы users нет: `user_id BIGINT` = Telegram ID. Чужой ресурс → 404.
 
@@ -107,7 +110,7 @@ Makefile, .env.example, .gitignore, README.md
 - [x] 1.2 HTTP-каркас: `cmd/main.go` (удалить корневой `main.go`), app, rest, router (Recoverer,
   лог zerolog, CORS), response, `GET /health`; Makefile (`run`, `build`, `lint`), `.gitignore`,
   `.env.example`, `scripts/smoke.sh`. Проверка: `curl /health`.
-- [ ] 1.3 Postgres: pgxpool, goose + `00001_init.sql` (tasks, tags, task_tags, notes), миграции на
+- [x] 1.3 Postgres: pgxpool, goose + `00001_init.sql` (tasks, tags, task_tags, notes), миграции на
   старте. Проверка: сервис стартует с `DATABASE_URL`, таблицы созданы.
 - [ ] 1.4 Auth: `internal/auth`, подключение на `/v1`, юнит-тест. Проверка: `go test ./...`,
   без заголовка → 401.
@@ -133,5 +136,6 @@ Makefile, .env.example, .gitignore, README.md
 
 - 2026-09-26: план согласован. 1.1 закоммичен.
 - 2026-09-26: 1.2 закоммичен. Неизвестный роут/метод → 404/405 тоже в обёртке.
-- 2026-09-26: сделан 1.3, ждёт коммита. Локальная БД: brew `postgresql@18`, база `teriyaki`
+- 2026-09-26: 1.3 закоммичен. Локальная БД: brew `postgresql@18`, база `teriyaki`
   (`DATABASE_URL=postgres://localhost:5432/teriyaki?sslmode=disable`, юзер ОС без пароля).
+- 2026-09-27: сделан 1.4, ждёт коммита. Добавлен `GET /v1/me`.
