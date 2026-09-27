@@ -160,7 +160,7 @@ Makefile, .env.example, .gitignore, README.md
 ### Шаг 5. Финал
 - [x] 5.1 README: запуск, env, `DATABASE_URL` (миграции на старте → отдельная БД/юзер),
   auth для фронта, отличия от Confluence-доки (обёртка, id везде, tagIds, API тегов, фильтры).
-- [ ] 5.2 Docker: multi-stage `Dockerfile` (golang:1.27 → distroless static nonroot),
+- [x] 5.2 Docker: multi-stage `Dockerfile` (golang:1.27 → distroless static nonroot),
   `.dockerignore`, `make docker`, раздел в README (запуск с `--network host` к Postgres хоста).
 
 ## Журнал
@@ -183,3 +183,6 @@ Makefile, .env.example, .gitignore, README.md
 - 2026-09-27: 5.1 закоммичен.
 - 2026-09-27: добавлен 5.2 (Docker) по запросу. Образ 14.8 MB, smoke против контейнера (OrbStack,
   `--network host`) прошёл. Кросс-сборка `--platform linux/amd64` не проверялась.
+- 2026-09-27: страница API в Confluence (425986) обновлена до v6 под реализацию: разделы «Общее»
+  (авторизация, обёртка, коды, время, модели) и «Теги», уточнения по фильтрам/PUT/заметкам.
+  Inline-комментарий на «Создать таску» сохранён. README ссылается на неё как на актуальную.
