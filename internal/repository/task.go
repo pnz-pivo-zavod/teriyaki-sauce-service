@@ -17,6 +17,8 @@ var (
 	_taskCreateSQL string
 	//go:embed queries/task/get.sql
 	_taskGetSQL string
+	//go:embed queries/task/list.sql
+	_taskListSQL string
 	//go:embed queries/task/add_tags.sql
 	_taskAddTagsSQL string
 )
@@ -70,6 +72,22 @@ func (r *TaskRepository) Get(ctx context.Context, userID, id int64) (model.Task,
 	}
 
 	return task, nil
+}
+
+// List возвращает задачи пользователя по фильтру без тегов и заметок,
+// отсортированные по date (без даты — в конце), затем по id.
+func (r *TaskRepository) List(ctx context.Context, userID int64, f model.TaskFilter) ([]model.Task, error) {
+	rows, err := r.db.Query(ctx, _taskListSQL, userID, f.StartDate, f.EndDate, f.IsCompleted)
+	if err != nil {
+		return nil, fmt.Errorf("select tasks: %w", err)
+	}
+
+	tasks, err := pgx.CollectRows(rows, scanTask)
+	if err != nil {
+		return nil, fmt.Errorf("collect tasks: %w", err)
+	}
+
+	return tasks, nil
 }
 
 func addTags(ctx context.Context, tx pgx.Tx, userID, taskID int64, tagIDs []int64) error {

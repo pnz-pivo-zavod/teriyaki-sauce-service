@@ -83,3 +83,43 @@ check "create task: bad date -> 400" 400 '.error != null' POST /v1/task '{"name"
 check "get missing task -> 404" 404 '.error != null' GET /v1/task/999999999
 check "task tag removed on tag delete" 200 '.data == null' DELETE "/v1/tag/$TASK_TAG_ID"
 check "get task after tag delete" 200 '.data.tags == []' GET "/v1/task/$TASK_ID"
+
+# Список задач: t1 — 2026-10-01 10:00Z с тегом, t2 — 2026-10-02 10:00Z, t3 — без даты.
+check "list: tag" 201 '.data.id > 0' POST /v1/tag "{\"name\":\"$TAG-list\"}"
+LIST_TAG_ID="$(last .data.id)"
+check "list: create t1" 201 '.data.id > 0' POST /v1/task \
+	"{\"name\":\"t1\",\"date\":\"2026-10-01T10:00:00Z\",\"tagIds\":[$LIST_TAG_ID]}"
+T1="$(last .data.id)"
+check "list: create t2" 201 '.data.id > 0' POST /v1/task '{"name":"t2","date":"2026-10-02T10:00:00Z"}'
+T2="$(last .data.id)"
+check "list: create t3" 201 '.data.id > 0' POST /v1/task '{"name":"t3"}'
+T3="$(last .data.id)"
+
+# has <id...> / hasnt <id...> — jq-условия на наличие задач в .data.
+has() { local c="true"; for id in "$@"; do c="$c and any(.data[]; .id == $id)"; done; echo "$c"; }
+hasnt() { local c="true"; for id in "$@"; do c="$c and all(.data[]; .id != $id)"; done; echo "$c"; }
+
+check "list: no filters -> all, sorted date asc, no date last" 200 \
+	"$(has "$T1" "$T2" "$T3") and ([.data[].id] | index($T1) < index($T2) and index($T2) < index($T3))" \
+	GET /v1/tasks
+check "list: tags filled, notes []" 200 \
+	"(.data[] | select(.id == $T1) | .tags[0].id == $LIST_TAG_ID and .notes == [])" GET /v1/tasks
+check "list: startDate only -> one day" 200 "$(has "$T1") and $(hasnt "$T2" "$T3")" \
+	GET "/v1/tasks?startDate=2026-10-01T00:00:00Z"
+check "list: startDate with offset (%2B)" 200 "$(has "$T1") and $(hasnt "$T2" "$T3")" \
+	GET "/v1/tasks?startDate=2026-10-01T03:00:00%2B03:00"
+check "list: startDate+endDate -> [start, end)" 200 "$(has "$T1" "$T2") and $(hasnt "$T3")" \
+	GET "/v1/tasks?startDate=2026-10-01T00:00:00Z&endDate=2026-10-02T10:00:01Z"
+check "list: endDate exclusive" 200 "$(has "$T1") and $(hasnt "$T2" "$T3")" \
+	GET "/v1/tasks?startDate=2026-10-01T00:00:00Z&endDate=2026-10-02T10:00:00Z"
+check "list: endDate only" 200 "$(has "$T1") and $(hasnt "$T2" "$T3")" \
+	GET "/v1/tasks?endDate=2026-10-02T00:00:00Z"
+check "list: isCompleted=false" 200 "$(has "$T1" "$T2" "$T3")" GET "/v1/tasks?isCompleted=false"
+check "list: isCompleted=true" 200 "$(hasnt "$T1" "$T2" "$T3")" GET "/v1/tasks?isCompleted=true"
+check "list: empty result -> []" 200 '.data == []' \
+	GET "/v1/tasks?startDate=1990-01-01T00:00:00Z"
+check "list: bad startDate -> 400" 400 '.error != null' GET "/v1/tasks?startDate=2026-10-01"
+check "list: end <= start -> 400" 400 '.error == "endDate must be after startDate"' \
+	GET "/v1/tasks?startDate=2026-10-02T00:00:00Z&endDate=2026-10-01T00:00:00Z"
+check "list: bad isCompleted -> 400" 400 '.error != null' GET "/v1/tasks?isCompleted=yes"
+check "list: cleanup tag" 200 '.error == null' DELETE "/v1/tag/$LIST_TAG_ID"

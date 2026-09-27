@@ -54,6 +54,14 @@ type (
 		IsCompleted bool       `json:"isCompleted"`
 	}
 
+	// TaskFilter — фильтры GET /v1/tasks, nil — фильтр не задан.
+	// Даты — полуинтервал [StartDate, EndDate).
+	TaskFilter struct {
+		StartDate   *time.Time
+		EndDate     *time.Time
+		IsCompleted *bool
+	}
+
 	Note struct {
 		ID     int64     `json:"id"`
 		TaskID int64     `json:"taskId"`

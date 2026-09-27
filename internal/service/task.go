@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/samber/lo"
 
@@ -10,7 +11,10 @@ import (
 	"teriyaki-sauce-service/internal/repository"
 )
 
-const _maxPriority = 3
+const (
+	_maxPriority = 3
+	_day         = 24 * time.Hour
+)
 
 // TaskService — логика задач.
 type TaskService struct {
@@ -53,8 +57,32 @@ func (s *TaskService) Get(ctx context.Context, userID, id int64) (model.Task, er
 	return tasks[0], nil
 }
 
+// List возвращает задачи пользователя по фильтру с тегами и заметками.
+// Только StartDate → интервал в одни сутки от него.
+func (s *TaskService) List(ctx context.Context, userID int64, f model.TaskFilter) ([]model.Task, error) {
+	if f.StartDate != nil && f.EndDate == nil {
+		end := f.StartDate.Add(_day)
+		f.EndDate = &end
+	}
+
+	if f.StartDate != nil && !f.EndDate.After(*f.StartDate) {
+		return nil, &model.ValidationError{Msg: "endDate must be after startDate"}
+	}
+
+	tasks, err := s.tasks.List(ctx, userID, f)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.fill(ctx, tasks)
+}
+
 // fill подгружает теги задач одним запросом. tags и notes всегда не nil.
 func (s *TaskService) fill(ctx context.Context, tasks []model.Task) ([]model.Task, error) {
+	if len(tasks) == 0 {
+		return tasks, nil
+	}
+
 	ids := lo.Map(tasks, func(t model.Task, _ int) int64 { return t.ID })
 
 	tags, err := s.tags.ListByTaskIDs(ctx, ids)

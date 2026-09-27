@@ -39,6 +39,7 @@ func New(
 
 		r.Post("/task", task.Create)
 		r.Get("/task/{id}", task.Get)
+		r.Get("/tasks", task.List)
 	})
 
 	return r
