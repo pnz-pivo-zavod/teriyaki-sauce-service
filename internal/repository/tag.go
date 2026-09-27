@@ -21,6 +21,8 @@ var (
 	_tagUpdateSQL string
 	//go:embed queries/tag/delete.sql
 	_tagDeleteSQL string
+	//go:embed queries/tag/list_by_task_ids.sql
+	_tagListByTaskIDsSQL string
 )
 
 // TagRepository — теги в Postgres.
@@ -96,4 +98,33 @@ func (r *TagRepository) Delete(ctx context.Context, userID, id int64) error {
 	}
 
 	return nil
+}
+
+// ListByTaskIDs возвращает теги задач, сгруппированные по ID задачи.
+// Задачи без тегов в результате отсутствуют.
+func (r *TagRepository) ListByTaskIDs(ctx context.Context, taskIDs []int64) (map[int64][]model.Tag, error) {
+	rows, err := r.db.Query(ctx, _tagListByTaskIDsSQL, taskIDs)
+	if err != nil {
+		return nil, fmt.Errorf("select task tags: %w", err)
+	}
+	defer rows.Close()
+
+	tags := make(map[int64][]model.Tag)
+	for rows.Next() {
+		var (
+			taskID int64
+			tag    model.Tag
+		)
+		if err := rows.Scan(&taskID, &tag.ID, &tag.Name, &tag.Color); err != nil {
+			return nil, fmt.Errorf("scan task tag: %w", err)
+		}
+
+		tags[taskID] = append(tags[taskID], tag)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate task tags: %w", err)
+	}
+
+	return tags, nil
 }

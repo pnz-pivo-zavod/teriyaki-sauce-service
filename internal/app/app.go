@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 
 	"teriyaki-sauce-service/internal/api/rest"
@@ -35,15 +34,11 @@ func Run() error {
 		return errors.New("DATABASE_URL is required")
 	}
 
-	pool, err := pgxpool.New(ctx, dbURL)
+	pool, err := repository.NewPool(ctx, dbURL)
 	if err != nil {
-		return fmt.Errorf("create db pool: %w", err)
+		return err
 	}
 	defer pool.Close()
-
-	if err := pool.Ping(ctx); err != nil {
-		return fmt.Errorf("ping db: %w", err)
-	}
 
 	if err := repository.Migrate(ctx, pool); err != nil {
 		return fmt.Errorf("migrate: %w", err)
@@ -54,11 +49,19 @@ func Run() error {
 		return err
 	}
 
-	tagHandler := handler.NewTagHandler(service.NewTagService(repository.NewTagRepository(pool)))
+	var (
+		tagRepo  = repository.NewTagRepository(pool)
+		taskRepo = repository.NewTaskRepository(pool)
+	)
+
+	var (
+		tagHandler  = handler.NewTagHandler(service.NewTagService(tagRepo))
+		taskHandler = handler.NewTaskHandler(service.NewTaskService(taskRepo, tagRepo))
+	)
 
 	log.Info().Str("addr", addr).Msg("http server started")
 
-	return rest.Run(addr, router.New(authMW, tagHandler))
+	return rest.Run(addr, router.New(authMW, tagHandler, taskHandler))
 }
 
 func newAuth() (func(http.Handler) http.Handler, error) {

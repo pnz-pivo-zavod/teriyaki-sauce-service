@@ -8,6 +8,7 @@ require (
 	github.com/mymmrac/telego v1.10.0
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/rs/zerolog v1.35.1
+	github.com/samber/lo v1.53.0
 	github.com/stretchr/testify v1.12.1
 )
 

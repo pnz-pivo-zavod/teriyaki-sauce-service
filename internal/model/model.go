@@ -1,6 +1,9 @@
 package model
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var (
 	ErrNotFound = errors.New("not found")
@@ -26,5 +29,35 @@ type (
 	TagInput struct {
 		Name  string `json:"name"`
 		Color string `json:"color"`
+	}
+
+	Task struct {
+		ID          int64      `json:"id"`
+		Name        string     `json:"name"`
+		Description string     `json:"description,omitempty"`
+		Date        *time.Time `json:"date,omitempty"`
+		NotifyAt    *time.Time `json:"notifyAt,omitempty"`
+		Priority    int        `json:"priority"`
+		IsCompleted bool       `json:"isCompleted"`
+		Tags        []Tag      `json:"tags"`
+		Notes       []Note     `json:"notes"`
+	}
+
+	// TaskInput — тело POST/PUT задачи. IsCompleted учитывается только в PUT.
+	TaskInput struct {
+		Name        string     `json:"name"`
+		Description string     `json:"description"`
+		Date        *time.Time `json:"date"`
+		NotifyAt    *time.Time `json:"notifyAt"`
+		Priority    int        `json:"priority"`
+		TagIDs      []int64    `json:"tagIds"`
+		IsCompleted bool       `json:"isCompleted"`
+	}
+
+	Note struct {
+		ID     int64     `json:"id"`
+		TaskID int64     `json:"taskId"`
+		Text   string    `json:"text"`
+		Date   time.Time `json:"date"`
 	}
 )

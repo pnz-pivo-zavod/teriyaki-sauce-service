@@ -35,6 +35,8 @@
   через `//go:embed` в пакетные `string`-переменные (`_tagCreateSQL`). Инлайн-SQL в Go нет.
 - Конфиг из env: `HTTP_ADDR` (default `:8080`), `DATABASE_URL`, `BOT_TOKEN`, `DEV_USER_ID`.
   Makefile подхватывает `.env` (в .gitignore), есть `.env.example`.
+- timestamptz читаются из БД в UTC (кодек в `repository.NewPool`), ответы не зависят от
+  таймзоны сервера.
 - CORS allow-all (минимальный middleware, разрешён заголовок `Authorization`).
 
 ### Авторизация
@@ -59,6 +61,9 @@
 - `id` во всех ответах (в доке местами пропущен).
 - Запрос: `name` (обязателен), `description?`, `date?`, `notifyAt?`, `priority?` (0–3, default 0),
   `tagIds?: []int`, `isCompleted` (в PUT). Ответ: `tags: [{id, name, color}]`, `notes: [...]`.
+- POST: `isCompleted` из запроса игнорируется (новая задача всегда не завершена); дубли в
+  `tagIds` схлопываются; чужой/несуществующий тег → 400 `tagIds contain unknown tags`.
+- `priority` в ответе всегда есть (0 = No), не опускается.
 - PUT — полная замена (непереданное поле очищается), включая `tagIds` и `isCompleted`;
   `notes` в запросе игнорируются.
 - PATCH `/complete` → `isCompleted=true`, идемпотентно. Снять — через PUT.
@@ -130,7 +135,7 @@ Makefile, .env.example, .gitignore, README.md
   без заголовка → 401.
 
 ### Шаг 2. Теги
-- [ ] 2.1 CRUD тегов: модель, repository, service (валидация, 409), handlers, роуты, smoke.
+- [x] 2.1 CRUD тегов: модель, repository, service (валидация, 409), handlers, роуты, smoke.
 
 ### Шаг 3. Задачи
 - [ ] 3.1 `POST /v1/task`, `GET /v1/task/{id}`: task + task_tags в транзакции, tagIds
@@ -153,5 +158,7 @@ Makefile, .env.example, .gitignore, README.md
 - 2026-09-26: 1.3 закоммичен. Локальная БД: brew `postgresql@18`, база `teriyaki`
   (`DATABASE_URL=postgres://localhost:5432/teriyaki?sslmode=disable`, юзер ОС без пароля).
 - 2026-09-27: 1.4 закоммичен. Добавлен `GET /v1/me`.
-- 2026-09-27: сделан 2.1, ждёт коммита. smoke.sh переписан: проверяет код ответа + jq,
+- 2026-09-27: 2.1 закоммичен (+ SQL в .sql, слои разделены по доменам). smoke.sh переписан: проверяет код ответа + jq,
   идемпотентен (уникальные имена).
+- 2026-09-27: сделан 3.1, ждёт коммита. Задача+теги в одной транзакции, теги задач грузятся
+  пакетно (`TagRepository.ListByTaskIDs`), `notes: []` до 4.2.

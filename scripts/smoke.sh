@@ -59,3 +59,27 @@ check "delete tag" 200 '.data == null and .error == null' DELETE "/v1/tag/$TAG_I
 check "delete tag again -> 404" 404 '.error != null' DELETE "/v1/tag/$TAG_ID"
 check "update missing tag -> 404" 404 '.error != null' PUT "/v1/tag/$TAG_ID" '{"name":"x"}'
 check "bad id -> 400" 400 '.error == "invalid id"' DELETE /v1/tag/abc
+
+# Задачи
+check "task: create tag for tasks" 201 '.data.id > 0' POST /v1/tag "{\"name\":\"$TAG-task\"}"
+TASK_TAG_ID="$(last .data.id)"
+check "create task" 201 \
+	".data.id > 0 and .data.name == \"buy milk\" and .data.priority == 2 and .data.isCompleted == false
+	and .data.date == \"2026-09-27T09:00:00Z\" and .data.description == null
+	and .data.tags == [{id: $TASK_TAG_ID, name: \"$TAG-task\"}] and .data.notes == []" \
+	POST /v1/task "{\"name\":\" buy milk \",\"date\":\"2026-09-27T12:00:00+03:00\",\"priority\":2,
+	\"tagIds\":[$TASK_TAG_ID,$TASK_TAG_ID],\"isCompleted\":true}"
+TASK_ID="$(last .data.id)"
+check "get task" 200 ".data.id == $TASK_ID and .data.tags[0].id == $TASK_TAG_ID and .data.notes == []" \
+	GET "/v1/task/$TASK_ID"
+check "create task without optional fields" 201 '.data.priority == 0 and .data.tags == [] and .data.date == null' \
+	POST /v1/task '{"name":"bare"}'
+check "create task: unknown tag -> 400" 400 '.error == "tagIds contain unknown tags"' \
+	POST /v1/task '{"name":"x","tagIds":[999999999]}'
+check "create task: blank name -> 400" 400 '.error == "name is required"' POST /v1/task '{"name":" "}'
+check "create task: priority 4 -> 400" 400 '.error == "priority must be 0..3"' \
+	POST /v1/task '{"name":"x","priority":4}'
+check "create task: bad date -> 400" 400 '.error != null' POST /v1/task '{"name":"x","date":"27.09.2026"}'
+check "get missing task -> 404" 404 '.error != null' GET /v1/task/999999999
+check "task tag removed on tag delete" 200 '.data == null' DELETE "/v1/tag/$TASK_TAG_ID"
+check "get task after tag delete" 200 '.data.tags == []' GET "/v1/task/$TASK_ID"
