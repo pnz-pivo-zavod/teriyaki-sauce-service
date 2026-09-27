@@ -36,6 +36,36 @@ make smoke                                  # против http://localhost:8080
 BASE_URL=http://host:8080 ./scripts/smoke.sh
 ```
 
+## Docker
+
+Образ: сборка в `golang:1.27`, запуск в `gcr.io/distroless/static-debian12:nonroot`
+(без shell, от непривилегированного пользователя). Миграции и SQL вшиты в бинарник.
+
+```sh
+make docker                           # docker build -t teriyaki-sauce-service .
+```
+
+Postgres на том же сервере — проще всего запустить контейнер в сети хоста, тогда `localhost`
+в `DATABASE_URL` указывает на хостовый Postgres:
+
+```sh
+docker run -d --name teriyaki-sauce-service --restart unless-stopped \
+  --network host \
+  -e HTTP_ADDR=:8080 \
+  -e DATABASE_URL='postgres://user:pass@localhost:5432/teriyaki?sslmode=disable' \
+  -e BOT_TOKEN='123456:ABC...' \
+  teriyaki-sauce-service
+```
+
+Или через файл: `--env-file /path/to/prod.env`. `DEV_USER_ID` на проде не задавать.
+
+Без `--network host` (`-p 8080:8080`) хост из контейнера доступен как `host.docker.internal`
+при `--add-host=host.docker.internal:host-gateway`, но тогда Postgres должен слушать docker-интерфейс
+(`listen_addresses`) и пускать подсеть docker в `pg_hba.conf`.
+
+Собрать на Mac (arm64) образ для сервера на amd64: `docker build --platform linux/amd64 -t teriyaki-sauce-service .`,
+перенести без registry: `docker save teriyaki-sauce-service | ssh server docker load`.
+
 ## Авторизация
 
 Все роуты `/v1/*` требуют заголовок с `initData` из Telegram Mini App:

@@ -1,7 +1,9 @@
 -include .env
 export
 
-.PHONY: run build lint smoke
+.PHONY: run build lint smoke docker
+
+IMAGE ?= teriyaki-sauce-service
 
 run:
 	go run ./cmd
@@ -14,3 +16,6 @@ lint:
 
 smoke:
 	./scripts/smoke.sh
+
+docker:
+	docker build -t $(IMAGE) .

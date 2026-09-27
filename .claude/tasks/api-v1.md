@@ -37,6 +37,8 @@
   Makefile подхватывает `.env` (в .gitignore), есть `.env.example`.
 - timestamptz читаются из БД в UTC (кодек в `repository.NewPool`), ответы не зависят от
   таймзоны сервера.
+- Деплой — Docker-образ на distroless `static-debian12:nonroot` (UID 65532, без shell).
+  Postgres на хосте → контейнер в `--network host`.
 - CORS allow-all (минимальный middleware, разрешён заголовок `Authorization`).
 
 ### Авторизация
@@ -156,8 +158,10 @@ Makefile, .env.example, .gitignore, README.md
 - [x] 4.2 Заметки во всех ответах задач (пакетно).
 
 ### Шаг 5. Финал
-- [ ] 5.1 README: запуск, env, `DATABASE_URL` (миграции на старте → отдельная БД/юзер),
+- [x] 5.1 README: запуск, env, `DATABASE_URL` (миграции на старте → отдельная БД/юзер),
   auth для фронта, отличия от Confluence-доки (обёртка, id везде, tagIds, API тегов, фильтры).
+- [ ] 5.2 Docker: multi-stage `Dockerfile` (golang:1.27 → distroless static nonroot),
+  `.dockerignore`, `make docker`, раздел в README (запуск с `--network host` к Postgres хоста).
 
 ## Журнал
 
@@ -176,4 +180,6 @@ Makefile, .env.example, .gitignore, README.md
 - 2026-09-27: 4.1 закоммичен.
 - 2026-09-27: 4.2 закоммичен. `TaskService.fill` грузит теги и заметки двумя
   пакетными запросами на любой список задач.
-- 2026-09-27: сделан 5.1 (README), ждёт коммита. После него план выполнен.
+- 2026-09-27: 5.1 закоммичен.
+- 2026-09-27: добавлен 5.2 (Docker) по запросу. Образ 14.8 MB, smoke против контейнера (OrbStack,
+  `--network host`) прошёл. Кросс-сборка `--platform linux/amd64` не проверялась.
